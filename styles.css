@@ -519,6 +519,17 @@ th {
   gap: 10px;
 }
 
+.compact-list {
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.muted-line {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .item-card {
   display: grid;
   gap: 9px;

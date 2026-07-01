@@ -228,6 +228,9 @@ async function renderDashboard() {
           <span class="badge ${levelClass(data.recommendation.level)}">${escapeHtml(data.recommendation.level)}</span>
         </div>
         <p>${escapeHtml(data.recommendation.message)}</p>
+        <div class="list compact-list">
+          ${(data.recommendation.steps || []).slice(0, 3).map((step) => `<div class="muted-line">${escapeHtml(step)}</div>`).join('')}
+        </div>
         <div class="button-row">
           <button class="action-button primary" data-go="whatnow" type="button"><i data-lucide="circle-help"></i>Calcular ahora</button>
           <button class="action-button secondary" data-go="checklist" type="button"><i data-lucide="list-checks"></i>Checklist</button>
@@ -735,7 +738,8 @@ async function renderChecklist() {
             <input class="check-toggle checklist-toggle" data-id="${escapeHtml(item.id)}" type="checkbox" ${item.completed ? 'checked' : ''}>
             <div>
               <strong>${escapeHtml(item.title)}</strong>
-              <div class="muted">${dateLabel(item.dueDate)}</div>
+              <div class="muted">${escapeHtml(item.description || '')}</div>
+              <div class="muted">${dateLabel(item.dueDate)} - ${item.completed ? 'Ya hice esto.' : 'Esto todavia falta.'}</div>
             </div>
             ${badge(levelClass(item.priority), item.priority)}
           </article>
@@ -990,6 +994,10 @@ async function submitWhatNow(event) {
         ${metric('Libre para gastar', money(result.freeToSpend), 'Despues de reservas', result.freeToSpend > 0 ? 'success' : 'critical')}
       </div>
       <div class="list" style="margin-top:14px">
+        <div class="item-card alert ${levelClass(result.recommendation.level)}">
+          <strong>${escapeHtml(result.recommendation.title)}</strong>
+          <span>${escapeHtml(result.recommendation.message)}</span>
+        </div>
         ${Object.values(result.decisions).map((line) => `<div class="item-card"><strong>${escapeHtml(line)}</strong></div>`).join('')}
         ${result.steps.map((line) => `<div class="item-card"><span>${escapeHtml(line)}</span></div>`).join('')}
       </div>
@@ -1238,6 +1246,7 @@ function renderAlertList(alerts) {
         </div>
         ${badge(levelClass(alert.priority), alert.priority)}
       </div>
+      ${alert.action ? `<div class="button-row"><button class="action-button secondary" type="button"><i data-lucide="check"></i>${escapeHtml(alert.action)}</button></div>` : ''}
     </article>
   `).join('') || empty('Sin alertas.')}</div>`;
 }
