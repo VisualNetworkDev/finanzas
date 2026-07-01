@@ -1281,14 +1281,14 @@ function postWithIframe(request) {
     const iframeName = `frame_${request.requestId}`;
     const iframe = document.createElement('iframe');
     iframe.name = iframeName;
-    iframe.className = 'hidden';
+    iframe.className = 'transport-frame';
     iframe.setAttribute('aria-hidden', 'true');
 
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = CONFIG.apiUrl;
     form.target = iframeName;
-    form.className = 'hidden';
+    form.className = 'transport-form';
 
     const input = document.createElement('input');
     input.type = 'hidden';

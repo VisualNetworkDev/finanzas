@@ -138,6 +138,22 @@ th {
   display: none !important;
 }
 
+.transport-frame,
+.transport-form {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
+.transport-frame {
+  border: 0;
+}
+
 .login-screen {
   min-height: 100vh;
   display: grid;
