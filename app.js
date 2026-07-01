@@ -1,7 +1,41 @@
 const CONFIG = {
   apiUrl: 'https://script.google.com/macros/s/AKfycbzMdsCVqnA9VUbXPZP3b_xBvUcCIlbKM7MFw5RoqowR5gmo_RTXHmP5dzmNpLqvwVy5/exec',
-  timeoutMs: 45000
+  timeoutMs: 30000,
+  cacheTtlMs: 90000,
+  busyDelayMs: 220,
+  loginCooldownMs: 1200
 };
+
+const MUTATING_ACTIONS = new Set([
+  'changePassword',
+  'saveAccount',
+  'updateAccountBalance',
+  'createTransfer',
+  'saveIncomeSource',
+  'deleteIncomeSource',
+  'savePaycheck',
+  'verifyPaycheck',
+  'markPaycheckNotReceived',
+  'saveBill',
+  'deleteBill',
+  'markBillPaid',
+  'markBillPartial',
+  'saveDebt',
+  'deleteDebt',
+  'makeDebtPayment',
+  'generateWeeklyChecklist',
+  'completeChecklistItem',
+  'reopenChecklistItem',
+  'createNotification',
+  'markNotificationRead',
+  'snoozeNotification',
+  'resolveNotification',
+  'importData',
+  'saveSettings',
+  'saveWorkShift',
+  'deleteWorkShift',
+  'seedUserFinancialData'
+]);
 
 const NAV = [
   ['dashboard', 'Dashboard', 'layout-dashboard'],
@@ -22,7 +56,12 @@ const state = {
   token: localStorage.getItem('mcf_token') || '',
   user: null,
   activeView: localStorage.getItem('mcf_view') || 'dashboard',
-  cache: {}
+  cache: {},
+  requestCache: {},
+  inFlight: {},
+  busyCount: 0,
+  busyTimer: 0,
+  loginLockedUntil: 0
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -44,7 +83,10 @@ function init() {
 function bindShell() {
   $('#loginForm').addEventListener('submit', handleLogin);
   $('#logoutButton').addEventListener('click', handleLogout);
-  $('#refreshButton').addEventListener('click', () => renderView(state.activeView, true));
+  $('#refreshButton').addEventListener('click', () => {
+    clearRequestCache();
+    renderView(state.activeView, true);
+  });
   $('#menuToggle').addEventListener('click', () => $('.sidebar').classList.toggle('open'));
   $('#forcedPasswordForm').addEventListener('submit', handleForcedPassword);
   document.addEventListener('click', handlePasswordToggle);
@@ -61,6 +103,9 @@ function renderNav() {
   $$('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       $('.sidebar').classList.remove('open');
+      if (button.dataset.view === state.activeView) {
+        return;
+      }
       renderView(button.dataset.view);
     });
   });
@@ -84,19 +129,28 @@ async function validateSavedSession() {
 
 async function handleLogin(event) {
   event.preventDefault();
+  if (Date.now() < state.loginLockedUntil) {
+    toast('Espera un momento antes de intentar otra vez.');
+    return;
+  }
+
   const payload = formValues(event.currentTarget);
   try {
     setBusy(true);
+    setFormDisabled(event.currentTarget, true);
     const data = await api('login', payload, { skipToken: true });
     state.token = data.token;
     state.user = data.user;
     localStorage.setItem('mcf_token', state.token);
+    clearRequestCache();
     showApp();
     toggleForcedPassword(Boolean(state.user.mustChangePassword));
     await renderView(state.user.mustChangePassword ? 'settings' : state.activeView, true);
   } catch (error) {
+    state.loginLockedUntil = Date.now() + CONFIG.loginCooldownMs;
     toast(error.message);
   } finally {
+    setFormDisabled(event.currentTarget, false);
     setBusy(false);
   }
 }
@@ -111,6 +165,8 @@ async function handleLogout() {
   }
   state.token = '';
   state.user = null;
+  state.cache = {};
+  clearRequestCache();
   localStorage.removeItem('mcf_token');
   showLogin();
 }
@@ -157,8 +213,11 @@ async function renderView(viewId, force = false) {
   const item = NAV.find(([id]) => id === viewId) || NAV[0];
   $('#eyebrow').textContent = item[1];
   $('#viewTitle').textContent = item[1];
-  $('#view').innerHTML = '<div class="empty">Cargando...</div>';
-  setBusy(true);
+  const warm = hasWarmView(viewId) && !force;
+  if (!warm) {
+    $('#view').innerHTML = '<div class="empty">Cargando...</div>';
+    setBusy(true);
+  }
 
   try {
     const renderers = {
@@ -179,16 +238,22 @@ async function renderView(viewId, force = false) {
   } catch (error) {
     $('#view').innerHTML = `<div class="empty">${escapeHtml(error.message || 'No se pudo cargar.')}</div>`;
   } finally {
-    setBusy(false);
+    if (!warm) {
+      setBusy(false);
+    }
     refreshIcons();
   }
 }
 
-async function renderDashboard() {
-  const data = await api('getDashboardData');
+async function renderDashboard(force = false) {
+  const data = await getViewData('dashboard', force);
   state.cache.dashboard = data;
   state.cache.accounts = data.accounts || [];
   state.cache.incomeSources = data.incomeSources || [];
+  const actionCenter = sortByDateAsc(data.actionCenter || [], 'dueDate');
+  const alerts = sortAlerts(data.alerts || []);
+  const upcomingBills = sortByDateAsc(data.upcomingBills || [], 'dueDate');
+  const pendingPaychecks = sortByDateAsc(data.pendingPaychecks || [], 'expectedDate');
 
   $('#view').innerHTML = `
     <section class="grid">
@@ -207,16 +272,7 @@ async function renderDashboard() {
           </div>
           <span class="badge blue">${escapeHtml(data.recommendation.level)}</span>
         </div>
-        <div class="list">
-          ${(data.actionCenter || []).map((step) => `
-            <div class="item-card">
-              <div class="item-row">
-                <strong>${escapeHtml(step)}</strong>
-                <i data-lucide="arrow-right"></i>
-              </div>
-            </div>
-          `).join('') || empty('Sin pasos pendientes.')}
-        </div>
+        ${renderActionCenter(actionCenter)}
       </div>
 
       <div class="panel span-5">
@@ -243,10 +299,10 @@ async function renderDashboard() {
         <div class="panel-head">
           <div>
             <h3>Alertas internas</h3>
-            <p>${data.alerts.length} activas</p>
+            <p>${alerts.length} activas</p>
           </div>
         </div>
-        ${renderAlertList(data.alerts.slice(0, 6))}
+        ${renderAlertList(alerts.slice(0, 6))}
       </div>
 
       <div class="panel span-6">
@@ -256,7 +312,7 @@ async function renderDashboard() {
             <p>14 dias</p>
           </div>
         </div>
-        ${renderUpcomingBills(data.upcomingBills.slice(0, 7))}
+        ${renderUpcomingBills(upcomingBills.slice(0, 7))}
       </div>
     </section>
 
@@ -268,7 +324,7 @@ async function renderDashboard() {
             <p>No cuentan como disponible hasta confirmar</p>
           </div>
         </div>
-        ${renderPaycheckMini(data.pendingPaychecks)}
+        ${renderPaycheckMini(pendingPaychecks)}
       </div>
 
       <div class="panel span-6">
@@ -290,9 +346,10 @@ async function renderDashboard() {
   bindGoButtons();
 }
 
-async function renderAccounts() {
-  const accounts = await api('getAccounts');
-  const transfers = await api('getTransfers', { limit: 20 });
+async function renderAccounts(force = false) {
+  const data = await getViewData('accounts', force);
+  const accounts = data.accounts || [];
+  const transfers = sortByDateDesc(data.transfers || [], 'date');
   state.cache.accounts = accounts;
   const accountOptions = options(accounts, 'id', 'name');
 
@@ -376,12 +433,11 @@ async function renderAccounts() {
   $$('.edit-account').forEach((button) => button.addEventListener('click', () => fillAccountForm(accounts.find((a) => a.id === button.dataset.id))));
 }
 
-async function renderIncomes() {
-  const [sources, paychecks, accounts] = await Promise.all([
-    api('getIncomeSources'),
-    api('getPaychecks', { limit: 40 }),
-    api('getAccounts')
-  ]);
+async function renderIncomes(force = false) {
+  const data = await getViewData('incomes', force);
+  const sources = data.sources || [];
+  const paychecks = sortByDateDesc(data.paychecks || [], 'expectedDate');
+  const accounts = data.accounts || [];
   state.cache.accounts = accounts;
   state.cache.incomeSources = sources;
 
@@ -453,11 +509,10 @@ async function renderIncomes() {
   $$('.edit-source').forEach((button) => button.addEventListener('click', () => fillIncomeSourceForm(sources.find((s) => s.id === button.dataset.id))));
 }
 
-async function renderPaychecks() {
-  const [pending, sources] = await Promise.all([
-    api('getPendingPaycheckVerifications'),
-    api('getIncomeSources')
-  ]);
+async function renderPaychecks(force = false) {
+  const data = await getViewData('paychecks', force);
+  const pending = sortByDateAsc(data.pending || [], 'expectedDate');
+  const sources = data.sources || [];
   state.cache.incomeSources = sources;
   $('#view').innerHTML = `
     <section class="panel">
@@ -492,12 +547,11 @@ async function renderPaychecks() {
   $$('.not-received').forEach((button) => button.addEventListener('click', () => markNotReceived(button.dataset.id)));
 }
 
-async function renderBills() {
-  const [bills, upcoming, accounts] = await Promise.all([
-    api('getBills'),
-    api('getUpcomingBills', { days: 30 }),
-    api('getAccounts')
-  ]);
+async function renderBills(force = false) {
+  const data = await getViewData('bills', force);
+  const bills = data.bills || [];
+  const upcoming = sortByDateAsc(data.upcoming || [], 'dueDate');
+  const accounts = data.accounts || [];
   state.cache.accounts = accounts;
 
   $('#view').innerHTML = `
@@ -563,12 +617,11 @@ async function renderBills() {
   $$('.edit-bill').forEach((button) => button.addEventListener('click', () => fillBillForm(bills.find((b) => b.id === button.dataset.id))));
 }
 
-async function renderDebts() {
-  const [debts, strategy, accounts] = await Promise.all([
-    api('getDebts'),
-    api('getDebtStrategy'),
-    api('getAccounts')
-  ]);
+async function renderDebts(force = false) {
+  const data = await getViewData('debts', force);
+  const debts = data.debts || [];
+  const strategy = data.strategy || {};
+  const accounts = data.accounts || [];
   state.cache.accounts = accounts;
 
   $('#view').innerHTML = `
@@ -633,11 +686,10 @@ async function renderDebts() {
   $$('.edit-debt').forEach((button) => button.addEventListener('click', () => fillDebtForm(debts.find((d) => d.id === button.dataset.id))));
 }
 
-async function renderShifts() {
-  const [sources, shifts] = await Promise.all([
-    api('getIncomeSources'),
-    api('getWorkShifts', { limit: 50 })
-  ]);
+async function renderShifts(force = false) {
+  const data = await getViewData('shifts', force);
+  const sources = data.sources || [];
+  const shifts = sortByDateDesc(data.shifts || [], 'date');
   const amazon = sources.find((s) => /amazon/i.test(s.name)) || sources[0] || {};
   $('#view').innerHTML = `
     <section class="grid">
@@ -674,8 +726,9 @@ async function renderShifts() {
   $('#shiftForm').addEventListener('submit', submitShift);
 }
 
-async function renderCalendar() {
-  const events = await api('getCalendarData', { days: 45 });
+async function renderCalendar(force = false) {
+  const data = await getViewData('calendar', force);
+  const events = sortByDateAsc(data.events || [], 'date');
   $('#view').innerHTML = `
     <section class="panel">
       <div class="panel-head"><h3>Calendario</h3></div>
@@ -720,8 +773,9 @@ async function renderWhatNow() {
   $('#whatNowForm').addEventListener('submit', submitWhatNow);
 }
 
-async function renderChecklist() {
-  const data = await api('getWeeklyChecklist');
+async function renderChecklist(force = false) {
+  const data = await getViewData('checklist', force);
+  const items = sortByDateAsc(data.items || [], 'dueDate');
   $('#view').innerHTML = `
     <section class="panel">
       <div class="panel-head">
@@ -733,7 +787,7 @@ async function renderChecklist() {
       </div>
       <div class="progress"><span style="width:${data.progress.percent}%"></span></div>
       <div class="list" style="margin-top:14px">
-        ${data.items.map((item) => `
+        ${items.map((item) => `
           <article class="item-card check-item">
             <input class="check-toggle checklist-toggle" data-id="${escapeHtml(item.id)}" type="checkbox" ${item.completed ? 'checked' : ''}>
             <div>
@@ -758,36 +812,66 @@ async function renderChecklist() {
   });
 }
 
-async function renderNotifications() {
-  const notifications = await api('getNotifications');
+async function renderNotifications(force = false) {
+  const data = await getViewData('notifications', force);
+  const alerts = sortAlerts(data.alerts || []);
+  const notifications = sortAlerts(data.notifications || []);
   $('#view').innerHTML = `
-    <section class="panel">
-      <div class="panel-head"><h3>Alertas y recordatorios</h3></div>
-      <div class="list">
+    <section class="grid">
+      <div class="panel span-7">
+        <div class="panel-head">
+          <div>
+            <h3>Alertas activas</h3>
+            <p>Ordenadas por fecha mas cercana</p>
+          </div>
+        </div>
+        ${renderAlertList(alerts)}
+      </div>
+
+      <div class="panel span-5">
+        <div class="panel-head">
+          <div>
+            <h3>Recordatorios internos</h3>
+            <p>Pendientes, pospuestos y abiertos</p>
+          </div>
+        </div>
+        <div class="list">
         ${notifications.map((notification) => `
-          <article class="item-card alert ${levelClass(notification.priority)}">
-            <div class="item-row">
-              <div>
-                <strong>${escapeHtml(notification.title)}</strong>
-                <div class="muted">${escapeHtml(notification.message)}</div>
-              </div>
-              ${badge(levelClass(notification.priority), notification.status || 'open')}
+          <article class="item-card alert-card ${levelClass(notification.priority)}">
+            <div class="alert-icon ${levelClass(notification.priority)}">
+              <i data-lucide="${alertIcon(notification)}"></i>
             </div>
-            <div class="button-row">
-              <button class="action-button secondary resolve-notification" data-id="${escapeHtml(notification.id)}" type="button"><i data-lucide="check"></i>Resolver</button>
-              <button class="action-button secondary snooze-notification" data-id="${escapeHtml(notification.id)}" type="button"><i data-lucide="clock"></i>Posponer</button>
+            <div class="alert-content">
+              <div class="item-row">
+                <div>
+                  <strong>${escapeHtml(notification.title)}</strong>
+                  <div class="muted">${escapeHtml(notification.message)}</div>
+                  <div class="action-meta">
+                    <span class="date-chip"><i data-lucide="calendar"></i>${dateLabel(notification.dueDate)}</span>
+                    <span>${escapeHtml(notification.type || 'general')}</span>
+                  </div>
+                </div>
+                ${badge(levelClass(notification.priority), notification.status || 'open')}
+              </div>
+              <div class="button-row">
+                <button class="action-button secondary resolve-notification" data-id="${escapeHtml(notification.id)}" type="button"><i data-lucide="check"></i>Resolver</button>
+                <button class="action-button secondary snooze-notification" data-id="${escapeHtml(notification.id)}" type="button"><i data-lucide="clock"></i>Posponer</button>
+              </div>
             </div>
           </article>
-        `).join('') || empty('No hay alertas internas.')}
+        `).join('') || empty('No hay recordatorios internos.')}
+        </div>
       </div>
     </section>
   `;
   $$('.resolve-notification').forEach((button) => button.addEventListener('click', () => resolveNotification(button.dataset.id)));
   $$('.snooze-notification').forEach((button) => button.addEventListener('click', () => snoozeNotification(button.dataset.id)));
+  bindGoButtons();
 }
 
-async function renderSettings() {
-  const settings = await api('getSettings');
+async function renderSettings(force = false) {
+  const data = await getViewData('settings', force);
+  const settings = data.settings || {};
   state.cache.settings = settings;
   $('#view').innerHTML = `
     <section class="grid">
@@ -824,7 +908,7 @@ async function renderSettings() {
           </label>
           <label class="wide">Nueva contrasena
             <span class="password-field">
-              <input name="newPassword" type="password" minlength="10" autocomplete="new-password" required>
+              <input name="newPassword" type="password" minlength="12" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}" title="Minimo 12 caracteres con mayuscula, minuscula, numero y simbolo" autocomplete="new-password" required>
               <button class="password-toggle" type="button" title="Mostrar contrasena" aria-label="Mostrar contrasena">
                 <i data-lucide="eye"></i>
               </button>
@@ -1115,6 +1199,49 @@ async function guarded(fn) {
   }
 }
 
+function viewPayload(view) {
+  const base = { view };
+  if (view === 'accounts') return { ...base, transfersLimit: 20 };
+  if (view === 'incomes') return { ...base, paychecksLimit: 40 };
+  if (view === 'bills') return { ...base, upcomingDays: 30 };
+  if (view === 'shifts') return { ...base, shiftsLimit: 50 };
+  if (view === 'calendar') return { ...base, days: 45 };
+  return base;
+}
+
+async function getViewData(view, force = false) {
+  return apiCached('getViewData', viewPayload(view), { force, ttlMs: CONFIG.cacheTtlMs });
+}
+
+function hasWarmView(view) {
+  const entry = state.requestCache[apiCacheKey('getViewData', viewPayload(view))];
+  return Boolean(entry && Date.now() - entry.at < CONFIG.cacheTtlMs);
+}
+
+async function apiCached(action, payload = {}, options = {}) {
+  const key = apiCacheKey(action, payload);
+  const ttlMs = options.ttlMs ?? CONFIG.cacheTtlMs;
+  const cached = state.requestCache[key];
+  if (!options.force && cached && Date.now() - cached.at < ttlMs) {
+    return cached.data;
+  }
+
+  if (!options.force && state.inFlight[key]) {
+    return state.inFlight[key];
+  }
+
+  state.inFlight[key] = api(action, payload, options)
+    .then((data) => {
+      state.requestCache[key] = { at: Date.now(), data };
+      return data;
+    })
+    .finally(() => {
+      delete state.inFlight[key];
+    });
+
+  return state.inFlight[key];
+}
+
 async function api(action, payload = {}, options = {}) {
   const requestId = `mcf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const request = {
@@ -1123,7 +1250,30 @@ async function api(action, payload = {}, options = {}) {
     token: options.skipToken ? '' : state.token,
     payload
   };
-  return postWithIframe(request);
+  const data = await postWithIframe(request);
+  if (MUTATING_ACTIONS.has(action)) {
+    clearRequestCache();
+  }
+  return data;
+}
+
+function apiCacheKey(action, payload = {}) {
+  return `${action}:${stableStringify(payload)}`;
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function clearRequestCache() {
+  state.requestCache = {};
+  state.inFlight = {};
 }
 
 function postWithIframe(request) {
@@ -1190,7 +1340,28 @@ function formValues(form) {
 }
 
 function setBusy(show) {
-  $('#busy').classList.toggle('hidden', !show);
+  if (show) {
+    state.busyCount += 1;
+    clearTimeout(state.busyTimer);
+    state.busyTimer = setTimeout(() => {
+      if (state.busyCount > 0) {
+        $('#busy').classList.remove('hidden');
+      }
+    }, CONFIG.busyDelayMs);
+    return;
+  }
+
+  state.busyCount = Math.max(0, state.busyCount - 1);
+  if (state.busyCount === 0) {
+    clearTimeout(state.busyTimer);
+    $('#busy').classList.add('hidden');
+  }
+}
+
+function setFormDisabled(form, disabled) {
+  $$('button, input, select, textarea', form).forEach((element) => {
+    element.disabled = disabled;
+  });
 }
 
 function toast(message) {
@@ -1236,19 +1407,96 @@ function metric(label, value, detail, tone = 'info') {
   `;
 }
 
+function renderActionCenter(items) {
+  const actions = (items || []).map(normalizeActionItem);
+  return `<div class="action-list">${actions.map((item, index) => `
+    <article class="action-card ${levelClass(item.priority)}">
+      <div class="action-index">${index + 1}</div>
+      <div class="action-body">
+        <div class="item-row">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            ${item.message ? `<div class="muted">${escapeHtml(item.message)}</div>` : ''}
+          </div>
+          ${badge(levelClass(item.priority), item.priority || 'paso')}
+        </div>
+        <div class="action-meta">
+          ${item.dueDate ? `<span class="date-chip"><i data-lucide="calendar"></i>${dateLabel(item.dueDate)}</span>` : ''}
+          ${item.type ? `<span>${escapeHtml(item.type)}</span>` : ''}
+        </div>
+        ${item.action ? `
+          <div class="button-row compact">
+            <button class="action-button secondary" ${item.view ? `data-go="${escapeAttr(item.view)}"` : ''} type="button">
+              <i data-lucide="${escapeAttr(item.icon || 'arrow-right')}"></i>${escapeHtml(item.action)}
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    </article>
+  `).join('') || empty('Sin pasos pendientes.')}</div>`;
+}
+
+function normalizeActionItem(item) {
+  if (typeof item === 'string') {
+    return {
+      title: item,
+      message: '',
+      priority: 'blue',
+      dueDate: '',
+      action: '',
+      view: ''
+    };
+  }
+  return {
+    title: item.title || item.message || 'Paso pendiente',
+    message: item.message || '',
+    priority: item.priority || item.level || 'blue',
+    dueDate: item.dueDate || '',
+    action: item.action || item.primaryAction || '',
+    view: item.view || '',
+    type: item.type || '',
+    icon: item.icon || 'arrow-right'
+  };
+}
+
 function renderAlertList(alerts) {
   return `<div class="list">${alerts.map((alert) => `
-    <article class="item-card alert ${levelClass(alert.priority)}">
-      <div class="item-row">
-        <div>
-          <strong>${escapeHtml(alert.title)}</strong>
-          <div class="muted">${escapeHtml(alert.message)}</div>
-        </div>
-        ${badge(levelClass(alert.priority), alert.priority)}
+    <article class="item-card alert-card ${levelClass(alert.priority)}">
+      <div class="alert-icon ${levelClass(alert.priority)}">
+        <i data-lucide="${alertIcon(alert)}"></i>
       </div>
-      ${alert.action ? `<div class="button-row"><button class="action-button secondary" type="button"><i data-lucide="check"></i>${escapeHtml(alert.action)}</button></div>` : ''}
+      <div class="alert-content">
+        <div class="item-row">
+          <div>
+            <strong>${escapeHtml(alert.title)}</strong>
+            <div class="muted">${escapeHtml(alert.message)}</div>
+          </div>
+          ${badge(levelClass(alert.priority), alert.priority)}
+        </div>
+        <div class="action-meta">
+          ${alert.dueDate ? `<span class="date-chip"><i data-lucide="calendar"></i>${dateLabel(alert.dueDate)}</span>` : ''}
+          <span>${escapeHtml(alert.type || 'alerta')}</span>
+        </div>
+        ${alert.action ? `
+          <div class="button-row compact">
+            <button class="action-button secondary" ${alert.view ? `data-go="${escapeAttr(alert.view)}"` : ''} type="button">
+              <i data-lucide="arrow-right"></i>${escapeHtml(alert.action)}
+            </button>
+          </div>
+        ` : ''}
+      </div>
     </article>
   `).join('') || empty('Sin alertas.')}</div>`;
+}
+
+function alertIcon(alert) {
+  const type = String(alert.type || '').toLowerCase();
+  if (type === 'bill') return 'receipt';
+  if (type === 'paycheck') return 'badge-dollar-sign';
+  if (type === 'debt') return 'trending-down';
+  if (type === 'transfer') return 'move-right';
+  if (type === 'budget') return 'wallet';
+  return 'bell';
 }
 
 function renderUpcomingBills(bills) {
@@ -1277,6 +1525,37 @@ function renderPaycheckMini(paychecks) {
       </div>
     </article>
   `).join('') || empty('Sin cheques pendientes.')}</div>`;
+}
+
+function sortByDateAsc(rows, key) {
+  return [...(rows || [])].sort((a, b) => dateValue(a[key]) - dateValue(b[key]));
+}
+
+function sortByDateDesc(rows, key) {
+  return [...(rows || [])].sort((a, b) => dateValue(b[key]) - dateValue(a[key]));
+}
+
+function sortAlerts(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const byDate = dateValue(a.dueDate) - dateValue(b.dueDate);
+    if (byDate !== 0) return byDate;
+    return priorityRank(a.priority) - priorityRank(b.priority);
+  });
+}
+
+function dateValue(value) {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+  const time = date.getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
+function priorityRank(value) {
+  const level = levelClass(value);
+  if (level === 'red') return 0;
+  if (level === 'yellow') return 1;
+  if (level === 'blue') return 2;
+  return 3;
 }
 
 function table(headers, rows) {
