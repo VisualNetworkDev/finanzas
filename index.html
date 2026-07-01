@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Mi Control Financiero</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div id="loginScreen" class="login-screen">
+      <section class="login-panel" aria-labelledby="loginTitle">
+        <div class="brand-mark">MCF</div>
+        <h1 id="loginTitle">Mi Control Financiero</h1>
+        <form id="loginForm" class="stack">
+          <label>
+            Usuario
+            <input id="loginUsername" name="username" autocomplete="username" required>
+          </label>
+          <label>
+            Contrasena
+            <span class="password-field">
+              <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+              <button class="password-toggle" type="button" title="Mostrar contrasena" aria-label="Mostrar contrasena">
+                <i data-lucide="eye"></i>
+              </button>
+            </span>
+          </label>
+          <button class="primary action-button" type="submit">
+            <i data-lucide="log-in"></i>
+            Entrar
+          </button>
+        </form>
+      </section>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar" aria-label="Navegacion principal">
+        <div class="sidebar-head">
+          <div class="brand-mark small">MCF</div>
+          <div>
+            <strong>Mi Control</strong>
+            <span>Financiero</span>
+          </div>
+        </div>
+        <nav id="mainNav" class="nav-list"></nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button id="menuToggle" class="icon-button mobile-only" type="button" title="Menu">
+            <i data-lucide="menu"></i>
+          </button>
+          <div>
+            <p id="eyebrow" class="eyebrow">Dashboard</p>
+            <h2 id="viewTitle">Dashboard</h2>
+          </div>
+          <div class="top-actions">
+            <button id="refreshButton" class="icon-button" type="button" title="Actualizar">
+              <i data-lucide="refresh-cw"></i>
+            </button>
+            <button id="logoutButton" class="icon-button" type="button" title="Cerrar sesion">
+              <i data-lucide="log-out"></i>
+            </button>
+          </div>
+        </header>
+
+        <section id="forcedPassword" class="notice-panel hidden">
+          <div>
+            <strong>Cambia la contrasena temporal</strong>
+            <span>Necesario antes de usar los datos.</span>
+          </div>
+          <form id="forcedPasswordForm" class="inline-form">
+            <span class="password-field">
+              <input name="currentPassword" type="password" placeholder="Contrasena actual" autocomplete="current-password">
+              <button class="password-toggle" type="button" title="Mostrar contrasena" aria-label="Mostrar contrasena">
+                <i data-lucide="eye"></i>
+              </button>
+            </span>
+            <span class="password-field">
+              <input name="newPassword" type="password" placeholder="Nueva contrasena" autocomplete="new-password" minlength="10" required>
+              <button class="password-toggle" type="button" title="Mostrar contrasena" aria-label="Mostrar contrasena">
+                <i data-lucide="eye"></i>
+              </button>
+            </span>
+            <button class="primary action-button" type="submit">
+              <i data-lucide="key-round"></i>
+              Cambiar
+            </button>
+          </form>
+        </section>
+
+        <div id="toast" class="toast hidden" role="status"></div>
+        <div id="view" class="view"></div>
+      </main>
+    </div>
+
+    <div id="busy" class="busy hidden" aria-live="polite">
+      <div class="spinner"></div>
+      <span>Procesando</span>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
