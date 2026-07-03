@@ -14,6 +14,7 @@ const MUTATING_ACTIONS = new Set([
   'saveIncomeSource',
   'deleteIncomeSource',
   'savePaycheck',
+  'recordReceivedPaycheck',
   'verifyPaycheck',
   'markPaycheckNotReceived',
   'saveBill',
@@ -40,16 +41,17 @@ const MUTATING_ACTIONS = new Set([
 ]);
 
 const NAV = [
-  ['today', 'Hoy', 'sparkles'],
-  ['paychecks', 'Cheques', 'badge-dollar-sign'],
+  ['home', 'Inicio', 'home'],
+  ['work', 'Trabajo', 'briefcase-business'],
   ['bills', 'Pagos', 'receipt'],
-  ['money', 'Mi dinero', 'wallet'],
-  ['more', 'Mas', 'more-horizontal']
+  ['debts', 'Deudas', 'trending-down'],
+  ['accounts', 'Cuentas', 'wallet']
 ];
 
 const MORE_NAV = [
-  ['accounts', 'Cuentas', 'wallet'],
-  ['debts', 'Deudas', 'trending-down'],
+  ['today', 'Hoy anterior', 'sparkles'],
+  ['paychecks', 'Cheques', 'badge-dollar-sign'],
+  ['money', 'Mi dinero', 'wallet'],
   ['shifts', 'Turnos', 'clock'],
   ['calendar', 'Calendario', 'calendar-days'],
   ['checklist', 'Checklist', 'list-checks'],
@@ -62,8 +64,8 @@ const MORE_NAV = [
 const state = {
   token: localStorage.getItem('mcf_token') || '',
   user: null,
-  activeView: 'today',
-  simpleMode: localStorage.getItem('mcf_mode') !== 'advanced',
+  activeView: 'home',
+  simpleMode: true,
   cache: {},
   requestCache: {},
   inFlight: {},
@@ -121,9 +123,6 @@ function renderNav() {
 
 function navIsActive(id) {
   if (id === state.activeView) return true;
-  if (id === 'more') {
-    return MORE_NAV.some(([view]) => view === state.activeView) || state.activeView === 'incomes';
-  }
   return false;
 }
 
@@ -135,15 +134,15 @@ function navItem(viewId) {
 async function validateSavedSession() {
   try {
     showApp();
-    $('#view').innerHTML = '<div class="empty">Cargando Hoy...</div>';
+    $('#view').innerHTML = '<div class="empty">Cargando Inicio...</div>';
     const data = await api('bootstrap');
     state.user = data.user;
     state.cache.settings = data.settings || {};
-    if (data.todayData) {
-      setApiCache('getViewData', viewPayload('today'), data.todayData);
+    if (data.homeData || data.todayData) {
+      setApiCache('getViewData', viewPayload('home'), data.homeData || data.todayData);
     }
     toggleForcedPassword(Boolean(state.user.mustChangePassword));
-    await renderView(state.user.mustChangePassword ? 'settings' : 'today', false);
+    await renderView(state.user.mustChangePassword ? 'settings' : 'home', false);
   } catch (error) {
     localStorage.removeItem('mcf_token');
     state.token = '';
@@ -169,12 +168,12 @@ async function handleLogin(event) {
     state.user = data.user;
     localStorage.setItem('mcf_token', state.token);
     clearRequestCache();
-    if (data.todayData) {
-      setApiCache('getViewData', viewPayload('today'), data.todayData);
+    if (data.homeData || data.todayData) {
+      setApiCache('getViewData', viewPayload('home'), data.homeData || data.todayData);
     }
     showApp();
     toggleForcedPassword(Boolean(state.user.mustChangePassword));
-    await renderView(state.user.mustChangePassword ? 'settings' : 'today', false);
+    await renderView(state.user.mustChangePassword ? 'settings' : 'home', false);
   } catch (error) {
     state.loginLockedUntil = Date.now() + CONFIG.loginCooldownMs;
     toast(error.message);
@@ -211,7 +210,7 @@ async function handleForcedPassword(event) {
     toggleForcedPassword(false);
     form.reset();
     toast('Contrasena actualizada.');
-    await renderView('today', true);
+    await renderView('home', true);
   } catch (error) {
     toast(error.message);
   } finally {
@@ -249,6 +248,8 @@ async function renderView(viewId, force = false) {
 
   try {
     const renderers = {
+      home: renderHome,
+      work: renderWork,
       today: renderToday,
       dashboard: renderDashboard,
       money: renderMoney,
@@ -266,12 +267,227 @@ async function renderView(viewId, force = false) {
       notifications: renderNotifications,
       settings: renderSettings
     };
-    await (renderers[viewId] || renderDashboard)(force);
+    await (renderers[viewId] || renderHome)(force);
   } catch (error) {
     $('#view').innerHTML = `<div class="empty">${escapeHtml(error.message || 'No se pudo cargar.')}</div>`;
   } finally {
     refreshIcons();
   }
+}
+
+async function renderHome(force = false) {
+  const data = await getViewData('home', force);
+  state.cache.today = data;
+  state.cache.dashboard = data;
+  state.cache.accounts = data.accounts || [];
+  state.cache.incomeSources = data.incomeSources || [];
+  state.cache.upcomingBills = data.upcomingBills || [];
+
+  const plan = normalizeWeeklyPlan(data);
+  const status = plan.status || {};
+  const nextPayment = plan.payments?.nextImportant || null;
+  const nextCheck = plan.paychecks?.nextPending || plan.paychecks?.nextExpected || null;
+  const steps = (status.steps || plan.recommendation?.steps || []).slice(0, 3);
+
+  $('#view').innerHTML = `
+    <section class="home-shell">
+      <article class="home-status ${levelClass(status.status)}">
+        <div>
+          <span class="today-kicker">Inicio</span>
+          <h3>${escapeHtml(status.title || 'Revisa tu dinero real')}</h3>
+          <p>${escapeHtml(plan.recommendation?.message || status.message || 'Primero mira lo que entra, lo que sale y lo que queda real.')}</p>
+        </div>
+        <span class="status-pill ${levelClass(status.status)}">${escapeHtml(status.status || 'plan')}</span>
+      </article>
+
+      <section class="home-metrics">
+        ${simpleMoneyCard('Espero recibir', money(plan.income.expectedTotal), 'Trabajo principal + Amazon estimado', 'blue')}
+        ${simpleMoneyCard('Recibido real', money(plan.income.receivedRealThisWeek), 'Cheques marcados esta semana', 'green')}
+        ${simpleMoneyCard('Sale antes del cheque', money(plan.outflows.beforeNextPaycheck), 'Pagos cercanos y deudas minimas', 'yellow')}
+        ${simpleMoneyCard('Disponible real', money(plan.totals.freeReal), plan.totals.freeReal > 0 ? 'Despues de separar lo importante' : 'No lo trates como libre', plan.totals.freeReal > 0 ? 'green' : 'red')}
+      </section>
+
+      <section class="home-grid">
+        <article class="panel span-7">
+          <div class="panel-head">
+            <div>
+              <h3>Recomendacion simple</h3>
+              <p>${escapeHtml(status.nextAction || 'Empieza por lo mas cercano.')}</p>
+            </div>
+          </div>
+          <strong class="next-action">${escapeHtml(status.nextAction || plan.recommendation?.title || 'Revisa pagos y cheques.')}</strong>
+          <div class="mini-checklist">
+            ${steps.map((step) => `<div><i data-lucide="check-circle-2"></i><span>${escapeHtml(step)}</span></div>`).join('') || '<div><i data-lucide="check-circle-2"></i><span>Sin pasos urgentes ahora.</span></div>'}
+          </div>
+        </article>
+
+        <article class="panel span-5">
+          <div class="panel-head"><h3>Lo proximo</h3></div>
+          <div class="simple-list">
+            <div>
+              <span>Proximo pago</span>
+              <strong>${nextPayment ? `${escapeHtml(nextPayment.name)} - ${money(nextPayment.remaining || nextPayment.amount)}` : 'Sin pago cercano'}</strong>
+              <small>${nextPayment ? dateLabel(nextPayment.dueDate) : 'Nada pendiente antes del cheque'}</small>
+            </div>
+            <div>
+              <span>Cheque por confirmar</span>
+              <strong>${nextCheck ? money(nextCheck.netEstimated || nextCheck.netActual || 0) : 'Sin cheque pendiente'}</strong>
+              <small>${nextCheck ? dateLabel(nextCheck.expectedDate) : 'No hay verificacion pendiente'}</small>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Reparto entre cuentas</h3>
+            <p>Que dejar quieto y que mover si sobra.</p>
+          </div>
+        </div>
+        <div class="account-plan-grid">
+          ${accountPlanCard('Capital One', plan.distribution.capitalOneKeep, 'Deja aqui pagos normales, hija, gasolina, comida y buffer.')}
+          ${accountPlanCard('VyStar Checking', plan.distribution.vystarCheckingMove, 'Solo para separar pagos futuros, mantenimiento o deuda extra.')}
+          ${accountPlanCard('VyStar Savings', plan.distribution.vystarSavingsMove, 'Ahorro real. No mover si falta algo importante.')}
+        </div>
+        <p class="muted-line">${escapeHtml(plan.distribution.message || 'No muevas dinero hasta cubrir pagos cercanos.')}</p>
+      </section>
+
+      <section class="quick-actions">
+        <button class="quick-button" data-quick="balance" type="button"><i data-lucide="wallet"></i><span>Actualizar balance</span></button>
+        <button class="quick-button" data-quick="verify-paycheck" type="button"><i data-lucide="badge-dollar-sign"></i><span>Marcar cheque recibido</span></button>
+        <button class="quick-button" data-quick="payment" type="button"><i data-lucide="receipt"></i><span>Marcar pago hecho</span></button>
+        <button class="quick-button" data-go="work" type="button"><i data-lucide="calendar-check"></i><span>Ver plan de la semana</span></button>
+      </section>
+    </section>
+  `;
+
+  bindGoButtons();
+  bindQuickActions();
+}
+
+async function renderWork(force = false) {
+  const data = await getViewData('work', force);
+  const plan = normalizeWeeklyPlan(data);
+  const accounts = data.accounts || [];
+  const sources = data.incomeSources || [];
+  const shifts = sortByDateAsc(data.shifts || [], 'date').slice(0, 8);
+  state.cache.today = data;
+  state.cache.accounts = accounts;
+  state.cache.incomeSources = sources;
+  state.cache.shifts = data.shifts || [];
+
+  const main = plan.work.main;
+  const amazon = plan.work.amazon;
+
+  $('#view').innerHTML = `
+    <section class="home-shell">
+      <section class="home-metrics">
+        ${simpleMoneyCard('Trabajo principal', money(main.normalNet), 'Neto normal semanal', 'blue')}
+        ${simpleMoneyCard('Amazon estimado', money(amazon.normalNet), '4 turnos aproximados', 'green')}
+        ${simpleMoneyCard('Horas esperadas', `${formatNumber(main.normalHours + amazon.normalHours)} h`, 'Principal + Amazon', 'yellow')}
+        ${simpleMoneyCard('Recibido real', money(plan.income.receivedRealThisWeek), 'Marcado esta semana', 'blue')}
+      </section>
+
+      <section class="grid">
+        <article class="panel span-6">
+          <div class="panel-head">
+            <div>
+              <h3>Trabajo principal</h3>
+              <p>Miercoles a sabado, 10 horas por dia.</p>
+            </div>
+          </div>
+          <form id="mainWorkForm" class="work-form" data-source="${escapeAttr(main.sourceId)}">
+            <div class="work-day-list">
+              ${main.days.map((day) => `
+                <label class="work-day-row">
+                  <input class="main-day-check" type="checkbox" checked>
+                  <span>${escapeHtml(day.label)}</span>
+                  <input class="main-day-hours" type="number" step="0.25" value="${Number(day.hours)}">
+                </label>
+              `).join('')}
+            </div>
+            <div class="calc-strip">
+              <span>Horas <strong id="mainCalcHours">0</strong></span>
+              <span>Gross <strong id="mainCalcGross">$0.00</strong></span>
+              <span>Taxes <strong id="mainCalcTaxes">$0.00</strong></span>
+              <span>Neto <strong id="mainCalcNet">$0.00</strong></span>
+            </div>
+            <div class="button-row">
+              <button id="recordMainPaycheck" class="action-button primary" type="button"><i data-lucide="badge-dollar-sign"></i>Marcar cheque recibido</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel span-6">
+          <div class="panel-head">
+            <div>
+              <h3>Amazon</h3>
+              <p>Marca turnos trabajados, cambia horas o agrega bono.</p>
+            </div>
+          </div>
+          <form id="amazonWorkForm" class="work-form" data-source="${escapeAttr(amazon.sourceId)}">
+            <div class="work-day-list">
+              ${amazon.shifts.map((shift, index) => `
+                <label class="work-day-row amazon-plan-row">
+                  <input class="amazon-shift-check" type="checkbox" ${index < 4 ? 'checked' : ''}>
+                  <span>${escapeHtml(shift.label)}</span>
+                  <input class="amazon-shift-date" type="date" value="${escapeAttr(shift.date)}">
+                  <input class="amazon-shift-start" type="time" value="${escapeAttr(shift.startTime)}">
+                  <input class="amazon-shift-end" type="time" value="${escapeAttr(shift.endTime)}">
+                  <input class="amazon-shift-hours" type="number" step="0.25" value="${Number(shift.hours)}">
+                </label>
+              `).join('')}
+            </div>
+            <div class="form-grid compact-fields">
+              <label>Rate<input id="amazonRate" type="number" step="0.01" value="${Number(amazon.hourlyRate)}"></label>
+              <label>Bono por hora<input id="amazonBonusRate" type="number" step="0.01" value="0"></label>
+              <label>Bono fijo<input id="amazonBonusFixed" type="number" step="0.01" value="0"></label>
+            </div>
+            <div class="calc-strip">
+              <span>Horas <strong id="amazonCalcHours">0</strong></span>
+              <span>Gross <strong id="amazonCalcGross">$0.00</strong></span>
+              <span>Taxes <strong id="amazonCalcTaxes">$0.00</strong></span>
+              <span>Neto <strong id="amazonCalcNet">$0.00</strong></span>
+            </div>
+            <div class="button-row">
+              <button class="action-button secondary" type="submit"><i data-lucide="save"></i>Guardar turnos marcados</button>
+              <button id="recordAmazonPaycheck" class="action-button primary" type="button"><i data-lucide="badge-dollar-sign"></i>Marcar cheque recibido</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Turnos guardados</h3>
+            <p>Actuales y futuros primero.</p>
+          </div>
+        </div>
+        <div class="list">
+          ${shifts.map((shift) => `
+            <article class="item-card shift-card" data-shift-id="${escapeAttr(shift.id)}">
+              <div class="item-row">
+                <div>
+                  <strong>${dateLabel(shift.date)} - ${escapeHtml(shift.startTime || '-')} a ${escapeHtml(shift.endTime || '-')}</strong>
+                  <div class="muted">${formatNumber(shift.hours)} h - estimado ${money(shift.estimatedNet)}</div>
+                </div>
+                <div class="button-row compact">
+                  <button class="action-button secondary edit-shift-modal" data-id="${escapeAttr(shift.id)}" type="button"><i data-lucide="pencil"></i>Editar</button>
+                  <button class="action-button danger delete-shift" data-id="${escapeAttr(shift.id)}" type="button"><i data-lucide="trash-2"></i>Borrar</button>
+                </div>
+              </div>
+            </article>
+          `).join('') || empty('Todavia no hay turnos guardados.')}
+        </div>
+      </section>
+    </section>
+  `;
+
+  bindWorkCalculators(plan, accounts);
+  $$('.edit-shift-modal').forEach((button) => button.addEventListener('click', () => openShiftEditModal(shifts.find((shift) => shift.id === button.dataset.id))));
+  $$('.delete-shift').forEach((button) => button.addEventListener('click', () => deleteShift(button.dataset.id)));
 }
 
 async function renderToday(force = false) {
@@ -550,53 +766,41 @@ async function renderAccounts(force = false) {
   const transfers = sortByDateDesc(data.transfers || [], 'date');
   state.cache.accounts = accounts;
   const accountOptions = options(accounts, 'id', 'name');
+  const plan = normalizeWeeklyPlan(data.weeklyPlan ? data : (state.cache.today || { accounts }));
 
   $('#view').innerHTML = `
-    <section class="grid">
-      <div class="panel span-5">
-        <div class="panel-head"><h3>Cuenta manual</h3></div>
-        <form id="accountForm" class="form-grid">
-          <input type="hidden" name="id">
-          <label>Nombre<input name="name" required></label>
-          <label>Tipo
-            <select name="type">
-              <option value="checking">Checking</option>
-              <option value="savings">Savings</option>
-              <option value="cash">Cash</option>
-            </select>
-          </label>
-          <label>Balance<input name="currentBalance" type="number" step="0.01" value="0" required></label>
-          <label class="full">Proposito<textarea name="purpose"></textarea></label>
-          <label><input class="check-toggle" name="isProtected" type="checkbox"> No tocar</label>
-          <div class="full button-row">
-            <button class="action-button primary" type="submit"><i data-lucide="save"></i>Guardar</button>
-            <button class="action-button secondary" type="reset"><i data-lucide="rotate-ccw"></i>Limpiar</button>
-          </div>
-        </form>
-      </div>
+    <section class="home-shell">
+      <section class="money-strip">
+        ${accounts.map((account) => simpleMoneyCard(account.name, money(account.currentBalance), account.purpose || account.type, account.isProtected ? 'green' : 'blue')).join('')}
+      </section>
 
-      <div class="panel span-7">
-        <div class="panel-head"><h3>Balances</h3></div>
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Reparto sugerido</h3>
+            <p>Usa esto antes de mover dinero.</p>
+          </div>
+        </div>
+        <div class="account-plan-grid">
+          ${accountPlanCard('Capital One', plan.distribution.capitalOneKeep, 'Debe cubrir pagos normales y gastos diarios.')}
+          ${accountPlanCard('VyStar Checking', plan.distribution.vystarCheckingMove, 'Separar pagos futuros, mantenimiento o deuda extra.')}
+          ${accountPlanCard('VyStar Savings', plan.distribution.vystarSavingsMove, 'Ahorro real, solo si todo lo importante esta cubierto.')}
+        </div>
+        <p class="muted-line">${escapeHtml(plan.distribution.message || 'Si algo falta, no muevas dinero a savings todavia.')}</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h3>Actualizar balances</h3></div>
         <div class="list">
           ${accounts.map((account) => `
-            <article class="item-card">
-              <div class="item-row">
-                <div>
-                  <strong>${escapeHtml(account.name)}</strong>
-                  <div class="muted">${escapeHtml(account.purpose || account.type)}</div>
-                </div>
-                <span class="amount">${money(account.currentBalance)}</span>
-              </div>
-              <form class="inline-form balance-form" data-id="${escapeHtml(account.id)}">
-                <input name="currentBalance" type="number" step="0.01" value="${Number(account.currentBalance || 0)}">
-                <button class="action-button secondary" type="submit"><i data-lucide="refresh-cw"></i>Actualizar</button>
-                <button class="action-button secondary edit-account" data-id="${escapeHtml(account.id)}" type="button"><i data-lucide="pencil"></i>Editar</button>
-              </form>
-            </article>
+            <form class="inline-form balance-form account-balance-row" data-id="${escapeHtml(account.id)}">
+              <strong>${escapeHtml(account.name)}</strong>
+              <input name="currentBalance" type="number" step="0.01" value="${Number(account.currentBalance || 0)}">
+              <button class="action-button secondary" type="submit"><i data-lucide="refresh-cw"></i>Actualizar</button>
+            </form>
           `).join('') || empty('No hay cuentas.')}
         </div>
-      </div>
-    </section>
+      </section>
 
     <section class="grid">
       <div class="panel span-5">
@@ -623,12 +827,11 @@ async function renderAccounts(force = false) {
         ]))}
       </div>
     </section>
+    </section>
   `;
 
-  $('#accountForm').addEventListener('submit', submitAccount);
   $('#transferForm').addEventListener('submit', submitTransfer);
   $$('.balance-form').forEach((form) => form.addEventListener('submit', submitBalance));
-  $$('.edit-account').forEach((button) => button.addEventListener('click', () => fillAccountForm(accounts.find((a) => a.id === button.dataset.id))));
 }
 
 async function renderIncomes(force = false) {
@@ -746,9 +949,6 @@ async function renderPaychecks(force = false) {
 }
 
 async function renderBills(force = false) {
-  if (!state.simpleMode) {
-    return renderBillsAdvanced(force);
-  }
   const data = await getViewData('bills', force);
   const upcomingAll = sortByDateAsc(data.upcoming || [], 'dueDate');
   const upcoming = upcomingAll.filter((bill) => Number(bill.remaining || 0) > 0);
@@ -779,7 +979,7 @@ async function renderBills(force = false) {
       <section class="quick-actions">
         <button class="quick-button" data-quick="daughter" type="button"><i data-lucide="hand-coins"></i><span>Registrar pago a hija</span></button>
         <button class="quick-button" data-quick="reserve-phone" type="button"><i data-lucide="phone"></i><span>Telefono/internet reservado</span></button>
-        <button class="quick-button" data-go="more" type="button"><i data-lucide="more-horizontal"></i><span>Mas opciones</span></button>
+        <button class="quick-button" data-quick="balance" type="button"><i data-lucide="wallet"></i><span>Actualizar balance</span></button>
       </section>
     </section>
   `;
@@ -872,33 +1072,22 @@ async function renderDebts(force = false) {
   state.cache.accounts = accounts;
 
   $('#view').innerHTML = `
-    <section class="grid">
-      <div class="panel span-5">
-        <div class="panel-head"><h3>Deuda</h3></div>
-        <form id="debtForm" class="form-grid">
-          <input type="hidden" name="id">
-          <label class="wide">Nombre<input name="name" required></label>
-          <label>Balance<input name="balance" type="number" step="0.01" required></label>
-          <label>Balance original<input name="originalBalance" type="number" step="0.01"></label>
-          <label>Minimo<input name="minimumPayment" type="number" step="0.01" required></label>
-          <label>Dia<input name="dueDay" placeholder="23"></label>
-          <label>Prioridad<select name="priority"><option value="normal">Normal</option><option value="important">Importante</option></select></label>
-          <label class="full">Notas<textarea name="notes"></textarea></label>
-          <div class="full button-row">
-            <button class="action-button primary" type="submit"><i data-lucide="save"></i>Guardar</button>
-          </div>
-        </form>
-      </div>
-      <div class="panel span-7">
+    <section class="home-shell">
+      <section class="home-metrics">
+        ${simpleMoneyCard('Total de deuda', money(strategy.totalBalance), 'Usando balances individuales', 'red')}
+        ${simpleMoneyCard('Minimo mensual', money(strategy.totalMinimums), 'Pagos minimos primero', 'yellow')}
+        ${simpleMoneyCard('Proxima meta', strategy.nextTarget ? strategy.nextTarget.name : 'Sin deuda', 'Snowball', 'blue')}
+        ${simpleMoneyCard('Extra permitido', strategy.extraAllowed ? 'Si' : 'No', strategy.extraAllowed ? 'Solo manteniendo buffer' : 'Primero pagos importantes', strategy.extraAllowed ? 'green' : 'red')}
+      </section>
+
+      <div class="panel">
         <div class="panel-head">
           <div>
-            <h3>Snowball</h3>
-            <p>${escapeHtml(strategy.message)}</p>
+            <h3>Estrategia</h3>
+            <p>${escapeHtml(strategy.message || 'Paga minimos primero. Extra solo si sobra dinero real.')}</p>
           </div>
-          <span class="badge blue">${money(strategy.totalBalance)}</span>
         </div>
-        <p>Orden: ${escapeHtml((strategy.recommendedOrder || []).join(' -> '))}</p>
-        <p>Minimos mensuales: <strong>${money(strategy.totalMinimums)}</strong></p>
+        <p class="muted-line">Orden snowball: ${escapeHtml((strategy.recommendedOrder || []).join(' -> ') || 'Deuda 2 -> Deuda 1 -> Deuda 3')}</p>
       </div>
     </section>
 
@@ -910,7 +1099,7 @@ async function renderDebts(force = false) {
             <div class="item-row">
               <div>
                 <strong>${escapeHtml(debt.name)}</strong>
-                <div class="muted">Minimo ${money(debt.minimumPayment)} - dia ${escapeHtml(debt.dueDay)}</div>
+                <div class="muted">Minimo ${money(debt.minimumPayment)} - dia ${escapeHtml(debt.dueDay)} - faltan aprox. ${Math.ceil(Number(debt.balance || 0) / Math.max(1, Number(debt.minimumPayment || 1)))} pagos</div>
               </div>
               <span class="amount">${money(debt.balance)}</span>
             </div>
@@ -928,9 +1117,8 @@ async function renderDebts(force = false) {
     </section>
   `;
 
-  $('#debtForm').addEventListener('submit', submitDebt);
   $$('.debt-payment').forEach((form) => form.addEventListener('submit', submitDebtPayment));
-  $$('.edit-debt').forEach((button) => button.addEventListener('click', () => fillDebtForm(debts.find((d) => d.id === button.dataset.id))));
+  $$('.edit-debt').forEach((button) => button.addEventListener('click', () => openDebtEditModal(debts.find((d) => d.id === button.dataset.id))));
 }
 
 async function renderShifts(force = false) {
@@ -1003,7 +1191,7 @@ async function renderCalendar(force = false) {
 }
 
 async function renderWhatNow() {
-  const today = state.cache.today || await getViewData('today');
+  const today = state.cache.today || await getViewData('home');
   const capitalOneAccount = (today.accounts || []).find((account) => account.name === 'Capital One') || {};
   $('#view').innerHTML = `
     <section class="grid">
@@ -1203,6 +1391,7 @@ async function submitBalance(event) {
   await guarded(async () => {
     await api('updateAccountBalance', { id: event.currentTarget.dataset.id, ...formValues(event.currentTarget) });
     toast('Balance actualizado.');
+    refreshViewsQuietly('home');
     renderView('accounts', true);
   });
 }
@@ -1242,7 +1431,7 @@ async function submitVerifyPaycheck(event) {
     await api('verifyPaycheck', { id, ...formValues(form) });
     confirmActionDone('Cheque recibido', 'Lo quite de pendientes y estoy buscando la siguiente fecha.');
     removePaycheckItem(id);
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
     refreshAndRenderQuietly('paychecks');
   });
 }
@@ -1252,7 +1441,7 @@ async function markNotReceived(id) {
     await api('markPaycheckNotReceived', { id });
     confirmActionDone('Cheque marcado como no recibido', 'Lo quite de pendientes y estoy actualizando las siguientes fechas.');
     removePaycheckItem(id);
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
     refreshAndRenderQuietly('paychecks');
   });
 }
@@ -1346,7 +1535,8 @@ async function deleteShift(id) {
     await api('deleteWorkShift', { id });
     confirmActionDone('Turno borrado', 'Se quito del historial.');
     removeShiftRow(id);
-    refreshAndRenderQuietly('shifts');
+    refreshAndRenderQuietly(state.activeView === 'work' ? 'work' : 'shifts');
+    refreshViewsQuietly('home');
   });
 }
 
@@ -1444,7 +1634,7 @@ async function importBackup(event) {
     const backup = JSON.parse(text);
     await api('importData', backup);
     toast('Backup importado.');
-    renderView('today', true);
+    renderView('home', true);
   });
 }
 
@@ -1543,7 +1733,7 @@ function openPaymentModal(daughterOnly) {
 }
 
 async function openPaycheckModal() {
-  const data = state.cache.today || await getViewData('today');
+  const data = state.cache.today || await getViewData('home');
   const pending = data.pendingPaychecks || [];
   if (!pending.length) {
     toast('No hay cheques pendientes.');
@@ -1571,7 +1761,7 @@ async function openPaycheckModal() {
     confirmActionDone('Cheque actualizado', 'Quedo marcado. La informacion se sincroniza sola.');
     removePendingPaycheckLocally(values.id);
     removePaycheckItem(values.id);
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
     if (state.activeView === 'paychecks') {
       refreshAndRenderQuietly('paychecks');
     }
@@ -1582,7 +1772,7 @@ async function markGasCovered() {
   await guarded(async () => {
     await api('markGasCovered');
     confirmActionDone('Gasolina cubierta', 'Quedo marcado. Ya no se debe tratar como pendiente.');
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
   });
 }
 
@@ -1590,7 +1780,7 @@ async function markPhoneInternetReserved() {
   await guarded(async () => {
     await api('markPhoneInternetReserved');
     confirmActionDone('Telefono e internet reservados', 'Quedo marcado. La pantalla se actualiza sola.');
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
   });
 }
 
@@ -1607,10 +1797,10 @@ function confirmPaymentSaved(payment) {
     payment.full ? 'Pago registrado' : 'Pago parcial registrado',
     `${name} quedo guardado por ${money(payment.amount)}. ${payment.pendingBankDeduction ? 'Todavia no lo uses: falta que salga del banco.' : (payment.full ? 'Ya no queda como pendiente.' : 'Se desconto el monto pagado.')}`
   );
-  if (state.activeView === 'today') {
-    refreshAndRenderQuietly('today');
+  if (state.activeView === 'home' || state.activeView === 'today') {
+    refreshAndRenderQuietly(state.activeView);
   } else {
-    refreshViewsQuietly('today');
+    refreshViewsQuietly('home');
   }
   refreshAndRenderQuietly('bills');
 }
@@ -1729,7 +1919,7 @@ function ensureListFallback(selector, title, subtitle) {
 }
 
 function refreshViewsQuietly(...views) {
-  const allowed = new Set(['today', 'dashboard', 'accounts', 'incomes', 'paychecks', 'bills', 'debts', 'shifts', 'calendar', 'checklist', 'notifications', 'settings']);
+  const allowed = new Set(['home', 'work', 'today', 'dashboard', 'accounts', 'incomes', 'paychecks', 'bills', 'debts', 'shifts', 'calendar', 'checklist', 'notifications', 'settings']);
   Array.from(new Set(views))
     .filter((view) => allowed.has(view))
     .forEach((view) => {
@@ -1751,11 +1941,13 @@ function refreshAndRenderQuietly(view) {
 }
 
 function rememberViewData(view, data) {
-  if (view === 'today') {
+  if (view === 'home' || view === 'today' || view === 'work') {
     state.cache.today = data;
     state.cache.dashboard = data;
     state.cache.accounts = data.accounts || state.cache.accounts || [];
     state.cache.incomeSources = data.incomeSources || state.cache.incomeSources || [];
+    state.cache.upcomingBills = data.upcomingBills || state.cache.upcomingBills || [];
+    state.cache.shifts = data.shifts || state.cache.shifts || [];
     return;
   }
   if (view === 'bills') {
@@ -1806,6 +1998,300 @@ function openQuickModal(title, bodyHtml, onSubmit) {
 
 function closeQuickModal() {
   $$('.modal-backdrop').forEach((modal) => modal.remove());
+}
+
+function normalizeWeeklyPlan(data) {
+  const accounts = data.accounts || [];
+  const capitalOne = findAccountByName(accounts, 'Capital One');
+  const checking = findAccountByName(accounts, 'VyStar Checking');
+  const savings = findAccountByName(accounts, 'VyStar Savings');
+  const totals = data.totals || {};
+  const status = data.weeklyPlan?.status || data.financialStatus || {};
+  const pendingBills = (data.billsBeforeNextPaycheck?.bills || data.upcomingBills || []).filter((bill) => Number(bill.remaining || 0) > 0);
+  const mainSource = (data.incomeSources || []).find((source) => /principal/i.test(source.name)) || {};
+  const amazonSource = (data.incomeSources || []).find((source) => /amazon/i.test(source.name)) || {};
+
+  if (data.weeklyPlan) {
+    return data.weeklyPlan;
+  }
+
+  const expectedMain = Number(mainSource.fixedNetPay || 711.86);
+  const expectedAmazon = 293.04;
+  return {
+    income: {
+      expectedMain,
+      expectedAmazon,
+      expectedTotal: expectedMain + expectedAmazon,
+      receivedRealThisWeek: 0
+    },
+    outflows: {
+      beforeNextPaycheck: Number(data.billsBeforeNextPaycheck?.totalRemaining || 0),
+      debtMinimums: 0,
+      gasEstimate: Number(data.context?.gasAmount || 60),
+      pendingBankDeduction: Number(totals.pendingBankDeduction || 0)
+    },
+    totals: {
+      visibleAvailable: Number(totals.totalRegistered || 0),
+      realAvailableBeforeReserves: Number(totals.realAvailableBeforeReserves || 0),
+      moneyNotToTouch: Number(status.moneyNotToTouch || totals.reserved || 0),
+      freeReal: Number(status.freeReal || totals.freeReal || 0)
+    },
+    status,
+    recommendation: data.recommendation || status,
+    payments: {
+      beforeNext: pendingBills,
+      nextImportant: pendingBills[0] || null
+    },
+    paychecks: {
+      nextPending: (data.pendingPaychecks || [])[0] || null,
+      nextExpected: data.nextPaycheck || null
+    },
+    distribution: buildDistributionFallback(status, capitalOne, checking, savings),
+    work: buildWorkFallback(data)
+  };
+}
+
+function buildDistributionFallback(status, capitalOne, checking, savings) {
+  const freeReal = Number(status.freeReal || 0);
+  const moneyNotToTouch = Number(status.moneyNotToTouch || 0);
+  const canMove = freeReal > 0 && status.status !== 'red';
+  const checkingMove = canMove ? Math.min(freeReal, 120) : 0;
+  const savingsMove = status.status === 'green' ? Math.max(0, freeReal - checkingMove) : 0;
+  return {
+    capitalOneKeep: Math.max(0, moneyNotToTouch),
+    vystarCheckingMove: checkingMove,
+    vystarSavingsMove: savingsMove,
+    balances: {
+      capitalOne: Number(capitalOne?.currentBalance || 0),
+      checking: Number(checking?.currentBalance || 0),
+      savings: Number(savings?.currentBalance || 0)
+    },
+    message: canMove
+      ? 'Puedes mover solo despues de dejar cubierto lo importante.'
+      : 'Ahora mismo deja el dinero quieto hasta cubrir pagos, gasolina y cheques pendientes.'
+  };
+}
+
+function buildWorkFallback(data) {
+  const sources = data.incomeSources || [];
+  const main = sources.find((source) => /principal/i.test(source.name)) || {};
+  const amazon = sources.find((source) => /amazon/i.test(source.name)) || {};
+  return {
+    main: {
+      sourceId: main.id || 'inc_main_job',
+      hourlyRate: Number(main.hourlyRate || 21),
+      taxRate: 0.1525,
+      normalHours: 40,
+      normalGross: 840,
+      normalNet: Number(main.fixedNetPay || 711.86),
+      days: [
+        { label: 'Miercoles', hours: 10 },
+        { label: 'Jueves', hours: 10 },
+        { label: 'Viernes', hours: 10 },
+        { label: 'Sabado', hours: 10 }
+      ]
+    },
+    amazon: {
+      sourceId: amazon.id || 'inc_amazon',
+      hourlyRate: Number(amazon.hourlyRate || 18.5),
+      taxRate: Number(amazon.taxRate || 0.12),
+      normalHours: 18,
+      normalGross: 333,
+      normalNet: 293.04,
+      shifts: defaultAmazonShiftRows()
+    }
+  };
+}
+
+function defaultAmazonShiftRows() {
+  const dates = [3, 4, 5, 6].map((offset) => addDaysISO(startOfWeekDate(), offset));
+  return [
+    { label: 'Turno 1', date: dates[0], startTime: '13:00', endTime: '17:30', hours: 4.5 },
+    { label: 'Turno 2', date: dates[1], startTime: '18:00', endTime: '22:30', hours: 4.5 },
+    { label: 'Turno 3', date: dates[2], startTime: '13:00', endTime: '17:30', hours: 4.5 },
+    { label: 'Turno 4', date: dates[3], startTime: '18:00', endTime: '22:30', hours: 4.5 }
+  ];
+}
+
+function accountPlanCard(label, amount, detail) {
+  return `
+    <article class="account-plan-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${money(amount)}</strong>
+      <small>${escapeHtml(detail || '')}</small>
+    </article>
+  `;
+}
+
+function bindWorkCalculators(plan, accounts) {
+  const mainForm = $('#mainWorkForm');
+  const amazonForm = $('#amazonWorkForm');
+  if (mainForm) {
+    const updateMain = () => calculateMainWork(mainForm, plan.work.main);
+    $$('.main-day-check, .main-day-hours', mainForm).forEach((input) => input.addEventListener('input', updateMain));
+    $('#recordMainPaycheck').addEventListener('click', () => openReceivedPaycheckModal('main', calculateMainWork(mainForm, plan.work.main), accounts));
+    updateMain();
+  }
+  if (amazonForm) {
+    const updateAmazon = () => calculateAmazonWork(amazonForm, plan.work.amazon);
+    $$('.amazon-shift-check, .amazon-shift-hours, #amazonRate, #amazonBonusRate, #amazonBonusFixed', amazonForm).forEach((input) => input.addEventListener('input', updateAmazon));
+    amazonForm.addEventListener('submit', submitAmazonShiftPlan);
+    $('#recordAmazonPaycheck').addEventListener('click', () => openReceivedPaycheckModal('amazon', calculateAmazonWork(amazonForm, plan.work.amazon), accounts));
+    updateAmazon();
+  }
+}
+
+function calculateMainWork(form, defaults) {
+  const rate = Number(defaults.hourlyRate || 21);
+  const taxRate = Number(defaults.taxRate || 0.1525);
+  const hours = $$('.work-day-row', form).reduce((total, row) => {
+    return total + ($('.main-day-check', row).checked ? Number($('.main-day-hours', row).value || 0) : 0);
+  }, 0);
+  const gross = hours * rate;
+  const taxes = gross * taxRate;
+  const net = gross - taxes;
+  updateCalcStrip('main', hours, gross, taxes, net);
+  return { sourceId: defaults.sourceId, hours, rate, bonusRate: 0, bonusFixed: 0, gross, taxes, net };
+}
+
+function calculateAmazonWork(form, defaults) {
+  const rate = Number($('#amazonRate').value || defaults.hourlyRate || 18.5);
+  const taxRate = Number(defaults.taxRate || 0.12);
+  const bonusRate = Number($('#amazonBonusRate').value || 0);
+  const bonusFixed = Number($('#amazonBonusFixed').value || 0);
+  const hours = $$('.amazon-plan-row', form).reduce((total, row) => {
+    return total + ($('.amazon-shift-check', row).checked ? Number($('.amazon-shift-hours', row).value || 0) : 0);
+  }, 0);
+  const gross = hours * (rate + bonusRate) + bonusFixed;
+  const taxes = gross * taxRate;
+  const net = gross - taxes;
+  updateCalcStrip('amazon', hours, gross, taxes, net);
+  return { sourceId: defaults.sourceId, hours, rate, bonusRate, bonusFixed, gross, taxes, net };
+}
+
+function updateCalcStrip(prefix, hours, gross, taxes, net) {
+  $(`#${prefix}CalcHours`).textContent = formatNumber(hours);
+  $(`#${prefix}CalcGross`).textContent = money(gross);
+  $(`#${prefix}CalcTaxes`).textContent = money(taxes);
+  $(`#${prefix}CalcNet`).textContent = money(net);
+}
+
+async function submitAmazonShiftPlan(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const sourceId = form.dataset.source;
+  const rate = Number($('#amazonRate').value || 18.5);
+  const bonusRate = Number($('#amazonBonusRate').value || 0);
+  const rows = $$('.amazon-plan-row', form).filter((row) => $('.amazon-shift-check', row).checked);
+  if (!rows.length) {
+    toast('Marca al menos un turno.');
+    return;
+  }
+  await guarded(async () => {
+    for (const row of rows) {
+      await api('saveWorkShift', {
+        incomeSourceId: sourceId,
+        date: $('.amazon-shift-date', row).value,
+        startTime: $('.amazon-shift-start', row).value,
+        endTime: $('.amazon-shift-end', row).value,
+        hours: $('.amazon-shift-hours', row).value,
+        rate,
+        bonusRate,
+        breakMinutes: 0
+      });
+    }
+    confirmActionDone('Turnos guardados', 'Trabajo se actualizo con los turnos marcados.');
+    refreshAndRenderQuietly('work');
+    refreshViewsQuietly('home');
+  });
+}
+
+function openReceivedPaycheckModal(kind, calc, accounts) {
+  const source = (state.cache.incomeSources || []).find((item) => String(item.id) === String(calc.sourceId)) || {};
+  const pending = (state.cache.today?.pendingPaychecks || []).find((paycheck) => paycheck.incomeSourceId === calc.sourceId);
+  openQuickModal(kind === 'main' ? 'Cheque trabajo principal' : 'Cheque Amazon', `
+    <input name="id" type="hidden" value="${escapeAttr(pending?.id || '')}">
+    <input name="incomeSourceId" type="hidden" value="${escapeAttr(calc.sourceId || source.id || '')}">
+    <input name="hours" type="hidden" value="${escapeAttr(calc.hours)}">
+    <input name="rate" type="hidden" value="${escapeAttr(calc.rate)}">
+    <input name="bonusRate" type="hidden" value="${escapeAttr(calc.bonusRate || 0)}">
+    <input name="bonusFixed" type="hidden" value="${escapeAttr(calc.bonusFixed || 0)}">
+    <input name="grossEstimated" type="hidden" value="${escapeAttr(roundClient(calc.gross))}">
+    <input name="taxesEstimated" type="hidden" value="${escapeAttr(roundClient(calc.taxes))}">
+    <input name="netEstimated" type="hidden" value="${escapeAttr(roundClient(calc.net))}">
+    <label>Monto real recibido<input name="netActual" type="number" step="0.01" value="${roundClient(calc.net)}" required></label>
+    <label>Cuenta<select name="account">${options(accounts, 'id', 'name', source.defaultAccount || 'acct_capital_one')}</select></label>
+    <label>Fecha recibida<input name="receivedDate" type="date" value="${todayIso()}"></label>
+    <label>Nota<input name="notes" placeholder="Opcional"></label>
+  `, async (values) => {
+    await api('recordReceivedPaycheck', values);
+    confirmActionDone('Cheque registrado', 'El balance y el plan se recalculan con ese ingreso.');
+    refreshViewsQuietly('home');
+    refreshAndRenderQuietly('work');
+  });
+}
+
+function openShiftEditModal(shift) {
+  if (!shift) return;
+  openQuickModal('Editar turno', `
+    <input name="id" type="hidden" value="${escapeAttr(shift.id)}">
+    <input name="incomeSourceId" type="hidden" value="${escapeAttr(shift.incomeSourceId)}">
+    <label>Fecha<input name="date" type="date" value="${escapeAttr(shift.date)}" required></label>
+    <label>Inicio<input name="startTime" type="time" value="${escapeAttr(shift.startTime || '')}"></label>
+    <label>Fin<input name="endTime" type="time" value="${escapeAttr(shift.endTime || '')}"></label>
+    <label>Horas<input name="hours" type="number" step="0.25" value="${Number(shift.hours || 0)}"></label>
+    <label>Rate<input name="rate" type="number" step="0.01" value="${Number(shift.rate || 18.5)}"></label>
+    <label>Bono/h<input name="bonusRate" type="number" step="0.01" value="${Number(shift.bonusRate || 0)}"></label>
+    <label>Nota<input name="notes" value="${escapeAttr(shift.notes || '')}"></label>
+  `, async (values) => {
+    await api('saveWorkShift', values);
+    confirmActionDone('Turno actualizado', 'El historial queda al dia.');
+    refreshAndRenderQuietly('work');
+    refreshViewsQuietly('home');
+  });
+}
+
+function openDebtEditModal(debt) {
+  if (!debt) return;
+  openQuickModal('Editar deuda', `
+    <input name="id" type="hidden" value="${escapeAttr(debt.id)}">
+    <label>Nombre<input name="name" value="${escapeAttr(debt.name)}" required></label>
+    <label>Balance<input name="balance" type="number" step="0.01" value="${Number(debt.balance || 0)}" required></label>
+    <label>Balance original<input name="originalBalance" type="number" step="0.01" value="${Number(debt.originalBalance || debt.balance || 0)}"></label>
+    <label>Minimo<input name="minimumPayment" type="number" step="0.01" value="${Number(debt.minimumPayment || 0)}" required></label>
+    <label>Dia<input name="dueDay" value="${escapeAttr(debt.dueDay || '')}"></label>
+    <input name="priority" type="hidden" value="${escapeAttr(debt.priority || 'important')}">
+    <label>Notas<textarea name="notes">${escapeHtml(debt.notes || '')}</textarea></label>
+  `, async (values) => {
+    await api('saveDebt', values);
+    confirmActionDone('Deuda actualizada', 'El resumen se recalcula.');
+    refreshAndRenderQuietly('debts');
+    refreshViewsQuietly('home');
+  });
+}
+
+function findAccountByName(accounts, name) {
+  return (accounts || []).find((account) => String(account.name || '').toLowerCase() === String(name || '').toLowerCase());
+}
+
+function startOfWeekDate() {
+  const date = new Date(`${todayInput()}T12:00:00`);
+  date.setDate(date.getDate() - date.getDay());
+  return date;
+}
+
+function addDaysISO(date, days) {
+  const copy = new Date(date.getTime());
+  copy.setDate(copy.getDate() + Number(days || 0));
+  return copy.toISOString().slice(0, 10);
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value || 0));
+}
+
+function roundClient(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
 function fillAccountForm(account) {
@@ -1864,12 +2350,14 @@ async function guarded(fn) {
 
 function viewPayload(view) {
   const base = { view };
+  if (view === 'home') return { view: 'home' };
+  if (view === 'work') return { view: 'work', shiftsLimit: 20 };
   if (view === 'today') return { view: 'today' };
   if (view === 'accounts') return { ...base, transfersLimit: 20 };
   if (view === 'incomes') return { ...base, paychecksLimit: 40 };
   if (view === 'bills') return { ...base, upcomingDays: 30 };
   if (view === 'shifts') return { ...base, shiftsLimit: 50 };
-  if (view === 'calendar') return { ...base, days: 45 };
+  if (view === 'calendar') return { ...base, days: 45, fromDate: '2026-07-01' };
   return base;
 }
 

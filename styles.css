@@ -866,6 +866,61 @@ th {
   max-width: 1040px;
 }
 
+.home-shell {
+  display: grid;
+  gap: 16px;
+  max-width: 1080px;
+}
+
+.home-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--info);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.home-status.red {
+  border-left-color: var(--critical);
+}
+
+.home-status.yellow {
+  border-left-color: var(--warning);
+}
+
+.home-status.green {
+  border-left-color: var(--success);
+}
+
+.home-status h3 {
+  margin: 6px 0;
+  font-size: 28px;
+}
+
+.home-status p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.home-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .today-hero {
   display: flex;
   justify-content: space-between;
@@ -937,6 +992,36 @@ th {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.account-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.account-plan-card {
+  display: grid;
+  gap: 7px;
+  min-height: 116px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+}
+
+.account-plan-card span,
+.account-plan-card small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.account-plan-card strong {
+  font-size: 25px;
+  line-height: 1.05;
 }
 
 .simple-money {
@@ -1101,6 +1186,80 @@ th {
   gap: 8px;
 }
 
+.work-form {
+  display: grid;
+  gap: 14px;
+}
+
+.work-day-list {
+  display: grid;
+  gap: 8px;
+}
+
+.work-day-row {
+  grid-template-columns: auto minmax(92px, 1fr) minmax(84px, 112px);
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.work-day-row.amazon-plan-row {
+  grid-template-columns: auto minmax(82px, 1fr) minmax(116px, 1fr) 92px 92px 78px;
+}
+
+.work-day-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+}
+
+.work-day-row input {
+  min-height: 36px;
+  padding: 7px 9px;
+}
+
+.calc-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calc-strip span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.calc-strip strong {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.compact-fields label {
+  grid-column: span 4;
+}
+
+.account-balance-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 180px) auto;
+  align-items: center;
+}
+
+.shift-card .button-row {
+  margin-top: 0;
+}
+
 .more-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1251,10 +1410,37 @@ th {
   }
 
   .money-strip,
+  .home-metrics,
   .today-grid,
+  .home-grid,
   .quick-actions,
-  .more-grid {
+  .more-grid,
+  .account-plan-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-status {
+    display: grid;
+    padding: 18px;
+  }
+
+  .home-status h3 {
+    font-size: 24px;
+  }
+
+  .work-day-row,
+  .work-day-row.amazon-plan-row,
+  .calc-strip,
+  .account-balance-row {
+    grid-template-columns: 1fr;
+  }
+
+  .work-day-row input[type="checkbox"] {
+    justify-self: start;
+  }
+
+  .compact-fields label {
+    grid-column: span 12;
   }
 
   .quick-button,
