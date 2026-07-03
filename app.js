@@ -2,6 +2,7 @@ const CONFIG = {
   apiUrl: 'https://script.google.com/macros/s/AKfycbzMdsCVqnA9VUbXPZP3b_xBvUcCIlbKM7MFw5RoqowR5gmo_RTXHmP5dzmNpLqvwVy5/exec',
   timeoutMs: 30000,
   cacheTtlMs: 90000,
+  homeSnapshotTtlMs: 86400000,
   busyDelayMs: 220,
   loginCooldownMs: 1200
 };
@@ -134,12 +135,20 @@ function navItem(viewId) {
 async function validateSavedSession() {
   try {
     showApp();
-    $('#view').innerHTML = '<div class="empty">Cargando Inicio...</div>';
+    const snapshot = loadHomeSnapshot();
+    if (snapshot) {
+      setApiCache('getViewData', viewPayload('home'), snapshot);
+      state.cache.today = snapshot;
+      renderView('home', false);
+    } else {
+      $('#view').innerHTML = '<div class="empty">Cargando Inicio...</div>';
+    }
     const data = await api('bootstrap');
     state.user = data.user;
     state.cache.settings = data.settings || {};
     if (data.homeData || data.todayData) {
       setApiCache('getViewData', viewPayload('home'), data.homeData || data.todayData);
+      saveHomeSnapshot(data.homeData || data.todayData);
     }
     toggleForcedPassword(Boolean(state.user.mustChangePassword));
     await renderView(state.user.mustChangePassword ? 'settings' : 'home', false);
@@ -170,6 +179,7 @@ async function handleLogin(event) {
     clearRequestCache();
     if (data.homeData || data.todayData) {
       setApiCache('getViewData', viewPayload('home'), data.homeData || data.todayData);
+      saveHomeSnapshot(data.homeData || data.todayData);
     }
     showApp();
     toggleForcedPassword(Boolean(state.user.mustChangePassword));
@@ -277,6 +287,7 @@ async function renderView(viewId, force = false) {
 
 async function renderHome(force = false) {
   const data = await getViewData('home', force);
+  saveHomeSnapshot(data);
   state.cache.today = data;
   state.cache.dashboard = data;
   state.cache.accounts = data.accounts || [];
@@ -2430,6 +2441,35 @@ function stableStringify(value) {
 function clearRequestCache() {
   state.requestCache = {};
   state.inFlight = {};
+  localStorage.removeItem('mcf_home_snapshot');
+}
+
+function saveHomeSnapshot(data) {
+  try {
+    if (!data || !data.weeklyPlan) return;
+    localStorage.setItem('mcf_home_snapshot', JSON.stringify({
+      at: Date.now(),
+      data
+    }));
+  } catch (error) {
+    console.warn('Home snapshot not saved:', error);
+  }
+}
+
+function loadHomeSnapshot() {
+  try {
+    const raw = localStorage.getItem('mcf_home_snapshot');
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot || !snapshot.data || Date.now() - Number(snapshot.at || 0) > CONFIG.homeSnapshotTtlMs) {
+      localStorage.removeItem('mcf_home_snapshot');
+      return null;
+    }
+    return snapshot.data;
+  } catch (error) {
+    localStorage.removeItem('mcf_home_snapshot');
+    return null;
+  }
 }
 
 function postWithIframe(request) {
