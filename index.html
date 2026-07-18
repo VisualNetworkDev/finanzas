@@ -9,8 +9,10 @@
   <title>Payment Organizer — Tus compromisos, bajo control</title>
   <link rel="icon" type="image/png" href="assets/brand/payment-organizer-logo.png">
   <link rel="stylesheet" href="styles.css">
-  <script src="public-config.js" defer></script>
-  <script src="api.js" defer></script>
+  <script src="shared/config.js" defer></script>
+  <script src="shared/api-client.js" defer></script>
+  <script src="shared/helpers.js" defer></script>
+  <script src="shared/validation.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -34,6 +36,7 @@
         <a href="#planes">Planes</a>
         <a href="#descargas">Descargas</a>
       </nav>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Cambiar apariencia" aria-pressed="false"><span aria-hidden="true">◐</span><span class="theme-toggle-label">Oscuro</span></button>
       <div class="header-actions" data-access-actions hidden>
         <button class="button button-quiet" type="button" data-open-auth="login">Iniciar sesión</button>
         <button class="button button-primary button-small" type="button" data-open-auth="register">Crear cuenta</button>

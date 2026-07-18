@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'">
+  <title>Mi portal — Payment Organizer</title>
+  <link rel="icon" type="image/png" href="../assets/brand/payment-organizer-logo.png">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="./portal.css">
+  <script src="../shared/config.js" defer></script>
+  <script src="../shared/api-client.js" defer></script>
+  <script src="../shared/helpers.js" defer></script>
+  <script src="./portal.js" defer></script>
+</head>
+<body class="portal-body">
+  <a class="skip-link" href="#portal-content">Saltar al contenido</a>
+  <header class="portal-header">
+    <div class="shell header-inner">
+      <a class="brand" href="../" aria-label="Payment Organizer, página principal">
+        <img src="../assets/brand/payment-organizer-logo.png" alt="" width="42" height="42">
+        <span>Payment Organizer</span>
+      </a>
+      <div class="portal-header-actions">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Cambiar apariencia" aria-pressed="false"><span aria-hidden="true">◐</span><span class="theme-toggle-label">Oscuro</span></button>
+        <button class="button button-quiet" type="button" data-logout>Cerrar sesión</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="portal-content" class="portal-main">
+    <div class="shell">
+      <div class="portal-loading" data-portal-loading>
+        <div><div class="loading-mark" aria-hidden="true"></div><p>Preparando tu portal…</p></div>
+      </div>
+
+      <div data-portal-content hidden>
+        <section class="portal-hero">
+          <div>
+            <p class="eyebrow">Tu espacio personal</p>
+            <h1>Hola, <span data-profile-name></span>.</h1>
+            <p>Consulta tu plan, dispositivos, versiones y novedades.</p>
+          </div>
+          <span class="plan-badge" data-plan-badge></span>
+        </section>
+
+        <p class="form-status" role="status" data-global-status></p>
+
+        <div class="portal-grid">
+          <section class="portal-card" aria-labelledby="profile-title">
+            <h2 id="profile-title">Tu cuenta</h2>
+            <dl class="profile-list">
+              <div><dt>Correo</dt><dd data-profile-email></dd></div>
+              <div><dt>Verificación</dt><dd data-profile-verified></dd></div>
+              <div><dt>Estado</dt><dd data-profile-status></dd></div>
+              <div><dt>Registro</dt><dd data-profile-created></dd></div>
+              <div><dt>Último acceso</dt><dd data-profile-last-login></dd></div>
+              <div><dt>Dispositivos</dt><dd data-device-count></dd></div>
+              <div><dt>Inicio Premium</dt><dd data-premium-start></dd></div>
+              <div><dt>Expiración Premium</dt><dd data-premium-expiry></dd></div>
+            </dl>
+          </section>
+
+          <section class="portal-card" aria-labelledby="activation-title">
+            <div class="card-header-row">
+              <div><h2 id="activation-title">Activar Premium</h2><p>Genera un código temporal para un dispositivo.</p></div>
+              <button class="button button-primary button-small" type="button" data-generate-code>Generar código</button>
+            </div>
+            <div class="empty-state" data-activation-free hidden>Esta opción aparece cuando tu cuenta tiene un plan Premium activo.</div>
+            <div class="code-panel" data-code-panel hidden>
+              <p>Código de un solo uso</p>
+              <div class="activation-code" data-activation-code></div>
+              <small>Vence <span data-code-expiry></span>. No lo compartas fuera de tu dispositivo.</small>
+              <button class="button button-secondary button-small" type="button" data-copy-code>Copiar código</button>
+            </div>
+          </section>
+
+          <section class="portal-card portal-card-wide" aria-labelledby="features-title">
+            <div class="card-header-row">
+              <div><h2 id="features-title">Funciones Premium</h2><p>Consulta qué funciones están incluidas por tu plan y cuáles fueron autorizadas individualmente.</p></div>
+            </div>
+            <div class="feature-entitlement-list" data-feature-entitlements></div>
+          </section>
+
+          <section class="portal-card portal-card-wide" aria-labelledby="devices-title">
+            <div class="card-header-row">
+              <div><h2 id="devices-title">Tus dispositivos</h2><p data-device-limit></p></div>
+            </div>
+            <div class="device-list" data-device-list></div>
+          </section>
+
+          <section class="portal-card" aria-labelledby="news-title">
+            <h2 id="news-title">Novedades</h2>
+            <div class="announcement-list" data-announcements></div>
+          </section>
+
+          <section class="portal-card" aria-labelledby="downloads-title">
+            <h2 id="downloads-title">Versiones y descargas</h2>
+            <div class="download-list" data-portal-downloads></div>
+          </section>
+
+          <section class="portal-card" aria-labelledby="help-title">
+            <h2 id="help-title">Centro de ayuda</h2>
+            <p>Consulta respuestas sobre privacidad, activación, compatibilidad, actualizaciones y recuperación de acceso.</p>
+            <div class="hero-actions">
+              <a class="button button-secondary" href="../#preguntas">Ver preguntas frecuentes</a>
+              <a class="button button-quiet" href="../#contacto">Contactar soporte</a>
+            </div>
+          </section>
+
+          <section class="portal-card portal-card-wide account-danger" aria-labelledby="security-title">
+            <h2 id="security-title">Seguridad de la cuenta</h2>
+            <p class="danger-copy">Puedes cerrar todas las sesiones o solicitar la eliminación lógica de tu cuenta. Ninguna de estas acciones borra los datos financieros guardados en tu aplicación.</p>
+            <div class="hero-actions">
+              <button class="button button-secondary" type="button" data-revoke-sessions>Cerrar todas las sesiones</button>
+              <button class="button button-danger" type="button" data-delete-account>Solicitar eliminación</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <dialog class="auth-dialog" data-confirm-dialog aria-labelledby="confirm-title">
+    <button class="dialog-close" type="button" data-cancel-confirm aria-label="Cerrar">×</button>
+    <p class="eyebrow">Confirmación</p>
+    <h2 id="confirm-title" data-confirm-title></h2>
+    <p data-confirm-message></p>
+    <form data-confirm-form>
+      <label data-confirm-input-wrap hidden>Escribe DELETE para confirmar<input name="confirmation" type="text" autocomplete="off"></label>
+      <div class="hero-actions">
+        <button class="button button-primary" type="submit" data-confirm-button>Confirmar</button>
+        <button class="button button-quiet" type="button" data-cancel-confirm>Cancelar</button>
+      </div>
+      <p class="form-status" role="status" data-confirm-status></p>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -167,7 +167,7 @@
     event.preventDefault();
     const form = event.currentTarget;
     if (!validateForm(form)) return;
-    const email = form.elements.email.value.trim().toLowerCase();
+    const email = window.PaymentValidation.normalizeEmail(form.elements.email.value);
     await requestCode("requestLoginCode", { email, sessionType: "PORTAL" }, email, form);
   }
 
@@ -175,7 +175,7 @@
     event.preventDefault();
     const form = event.currentTarget;
     if (!validateForm(form)) return;
-    const email = form.elements.email.value.trim().toLowerCase();
+    const email = window.PaymentValidation.normalizeEmail(form.elements.email.value);
     await requestCode("requestRegistrationCode", {
       name: form.elements.name.value.trim(),
       email,
@@ -223,7 +223,7 @@
       if (state.authMode === "login") payload.sessionType = "PORTAL";
       const result = await api.request(action, payload);
       api.savePortalSession(result.session);
-      window.location.assign("portal.html");
+      window.location.assign(config.routes && config.routes.portal || "./portal/");
     } catch (error) {
       setStatus(status, friendlyError(error), "error");
     } finally {

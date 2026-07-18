@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#101827">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'">
+  <title>Administración — Payment Organizer</title>
+  <link rel="icon" type="image/png" href="../assets/brand/payment-organizer-logo.png">
+  <link rel="stylesheet" href="./admin.css">
+  <script src="../shared/config.js" defer></script>
+  <script src="../shared/api-client.js" defer></script>
+  <script src="./admin-config.js" defer></script>
+  <script src="./admin-api.js" defer></script>
+  <script src="./admin.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#admin-content">Saltar al contenido</a>
+
+  <main class="login-screen" data-login-screen>
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="brand"><img src="../assets/brand/payment-organizer-logo.png" alt="" width="48" height="48"><span>Payment Organizer</span></div>
+      <p class="eyebrow">Acceso administrativo</p>
+      <h1 id="login-title">Gestiona la plataforma con seguridad.</h1>
+      <p class="login-copy">El acceso requiere una cuenta privada activa con rol ADMIN. El correo y la contraseña se verifican exclusivamente en el backend.</p>
+
+      <form data-admin-login-form novalidate>
+        <label>Correo administrativo<input name="email" type="email" autocomplete="username" maxlength="254" required></label>
+        <label>Contraseña<input name="password" type="password" autocomplete="current-password" minlength="12" maxlength="200" required></label>
+        <button class="button button-primary button-full" type="submit">Iniciar sesión</button>
+      </form>
+      <p class="status" role="status" data-login-status></p>
+    </section>
+  </main>
+
+  <div class="admin-shell" data-admin-shell hidden>
+    <aside class="sidebar">
+      <div class="brand sidebar-brand"><img src="../assets/brand/payment-organizer-logo.png" alt="" width="42" height="42"><span>Payment Organizer</span></div>
+      <p class="sidebar-label">Administración</p>
+      <nav class="admin-nav" aria-label="Secciones administrativas">
+        <button class="nav-item is-active" type="button" data-section="dashboard"><span aria-hidden="true">⌂</span>Resumen</button>
+        <button class="nav-item" type="button" data-section="users"><span aria-hidden="true">◎</span>Usuarios</button>
+        <button class="nav-item" type="button" data-section="versions"><span aria-hidden="true">⇧</span>Versiones</button>
+        <button class="nav-item" type="button" data-section="announcements"><span aria-hidden="true">◈</span>Anuncios</button>
+        <button class="nav-item" type="button" data-section="settings"><span aria-hidden="true">⚙</span>Configuración</button>
+        <button class="nav-item" type="button" data-section="audit"><span aria-hidden="true">≡</span>Auditoría</button>
+        <button class="nav-item" type="button" data-section="errors"><span aria-hidden="true">!</span>Errores</button>
+        <button class="nav-item" type="button" data-section="contact"><span aria-hidden="true">✉</span>Contacto</button>
+      </nav>
+      <div class="sidebar-footer">
+        <p data-admin-identity></p>
+        <button class="button button-sidebar" type="button" data-admin-logout>Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <header class="mobile-header">
+      <button class="mobile-menu" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Abrir navegación">☰</button>
+      <div class="brand"><img src="../assets/brand/payment-organizer-logo.png" alt="" width="36" height="36"><span>Administración</span></div>
+      <button class="button button-quiet" type="button" data-admin-logout>Salir</button>
+    </header>
+
+    <main id="admin-content" class="admin-content">
+      <header class="content-header">
+        <div><p class="eyebrow" data-section-eyebrow>Plataforma</p><h1 data-section-title>Resumen</h1><p data-section-description>Estado general y actividad reciente.</p></div>
+        <button class="button button-secondary" type="button" data-refresh>Actualizar</button>
+      </header>
+      <p class="status global-status" role="status" data-global-status></p>
+      <div class="content-loading" data-content-loading hidden><span></span><p>Cargando información…</p></div>
+      <div data-section-content></div>
+    </main>
+  </div>
+
+  <dialog class="modal" data-user-dialog aria-labelledby="user-dialog-title">
+    <button class="modal-close" type="button" data-close-user aria-label="Cerrar">×</button>
+    <div data-user-detail></div>
+  </dialog>
+
+  <dialog class="modal modal-small" data-action-dialog aria-labelledby="action-title">
+    <button class="modal-close" type="button" data-cancel-action aria-label="Cerrar">×</button>
+    <p class="eyebrow">Confirmación requerida</p>
+    <h2 id="action-title" data-action-title></h2>
+    <p data-action-message></p>
+    <form data-action-form>
+      <label data-action-value-wrap hidden><span data-action-value-label>Valor</span><select name="value"></select></label>
+      <label data-action-note-wrap hidden><span data-action-note-label>Nota</span><textarea name="note" rows="4" maxlength="2000"></textarea></label>
+      <label>Motivo<input name="reason" type="text" maxlength="500"></label>
+      <div class="modal-actions"><button class="button button-primary" type="submit" data-action-confirm>Confirmar</button><button class="button button-quiet" type="button" data-cancel-action>Cancelar</button></div>
+      <p class="status" role="status" data-action-status></p>
+    </form>
+  </dialog>
+</body>
+</html>

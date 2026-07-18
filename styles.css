@@ -106,6 +106,25 @@ a { color: inherit; }
 .menu-button { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; flex-direction: column; gap: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer; }
 .menu-button span:not(.sr-only) { width: 20px; height: 2px; border-radius: 4px; background: var(--ink); }
 
+.theme-toggle {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle:hover { border-color: var(--blue); }
+
 .button {
   display: inline-flex;
   min-height: 48px;
@@ -308,6 +327,7 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .legal-page { min-height: 100vh; }
 .legal-header { border-bottom: 1px solid var(--line); background: rgba(247, 248, 252, 0.94); }
 .legal-header .header-inner { justify-content: space-between; }
+.legal-actions { display: flex; align-items: center; gap: 8px; }
 .legal-main { padding: 80px 0 110px; }
 .legal-document { max-width: 830px; }
 .legal-document h1 { margin: 0; font-size: clamp(42px, 6vw, 68px); letter-spacing: -0.055em; line-height: 1.04; }
@@ -359,6 +379,80 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .reveal { opacity: 0; transform: translateY(16px); transition: opacity 560ms ease, transform 560ms cubic-bezier(.2,.72,.2,1); }
 .reveal.is-visible { opacity: 1; transform: none; }
 
+.not-found-page {
+  display: grid;
+  width: min(680px, calc(100% - 32px));
+  min-height: 100vh;
+  margin-inline: auto;
+  align-content: center;
+  justify-items: start;
+}
+.not-found-page h1 { margin: 0; font-size: clamp(42px, 7vw, 68px); line-height: 1.04; letter-spacing: -0.05em; }
+.not-found-page > p:not(.eyebrow) { margin: 18px 0 28px; color: var(--ink-soft); }
+.not-found-page img { margin-bottom: 24px; border-radius: 18px; }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1320;
+  --surface: #111d2d;
+  --surface-soft: #0e1a2a;
+  --ink: #edf3fb;
+  --ink-soft: #aab7c9;
+  --line: #2a3a50;
+  --blue: #5da2ff;
+  --blue-dark: #83b9ff;
+  --success: #64d8cd;
+  --danger: #ff98a6;
+  --shadow-sm: 0 10px 30px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .site-header,
+html[data-theme="dark"] .legal-header,
+html[data-theme="dark"] .portal-header { background: rgba(11, 19, 32, 0.9); }
+html[data-theme="dark"] .site-header.is-scrolled { border-color: var(--line); }
+html[data-theme="dark"] .site-nav a,
+html[data-theme="dark"] .trust-row,
+html[data-theme="dark"] .button-quiet,
+html[data-theme="dark"] .footer-grid nav a,
+html[data-theme="dark"] label,
+html[data-theme="dark"] .legal-document p,
+html[data-theme="dark"] .legal-document li { color: var(--ink-soft); }
+html[data-theme="dark"] .button-secondary,
+html[data-theme="dark"] .feature-card,
+html[data-theme="dark"] .overview-card,
+html[data-theme="dark"] .floating-card,
+html[data-theme="dark"] .portal-card { border-color: var(--line); background: rgba(17, 29, 45, 0.96); }
+html[data-theme="dark"] .button-secondary:hover,
+html[data-theme="dark"] .button-quiet:hover:not(:disabled) { background: #1b2a3d; }
+html[data-theme="dark"] .schedule-list > div,
+html[data-theme="dark"] .profile-list div,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea { border-color: var(--line); background: #0d1827; }
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] textarea:focus { background: #122033; }
+html[data-theme="dark"] .schedule-date,
+html[data-theme="dark"] .platform-mark,
+html[data-theme="dark"] .dialog-close,
+html[data-theme="dark"] .auth-tabs { background: #1a2a3f; }
+html[data-theme="dark"] .plan-card li { color: var(--ink-soft); }
+html[data-theme="dark"] .plan-card-featured { border-color: #4a5680; background: linear-gradient(160deg, #151f31, #1b2141); }
+html[data-theme="dark"] .site-footer,
+html[data-theme="dark"] .portal-body { background: #09111c; }
+html[data-theme="dark"] .footer-copy,
+html[data-theme="dark"] .device-item,
+html[data-theme="dark"] .announcement-item,
+html[data-theme="dark"] .download-item { border-color: var(--line); }
+html[data-theme="dark"] .auth-tabs button[aria-selected="true"],
+html[data-theme="dark"] .plan-badge { background: #18263a; color: var(--ink); }
+html[data-theme="dark"] .plan-badge.premium,
+html[data-theme="dark"] .code-panel { border-color: #5f55a7; background: #211d42; }
+html[data-theme="dark"] .activation-code { color: #c6b9ff; }
+html[data-theme="dark"] .legal-review-note { background: #302714; color: #f1d394; }
+html[data-theme="dark"] .account-danger { border-color: #61323d; }
+html[data-theme="dark"] .danger-copy { color: #ffb1bb; }
+html[data-theme="dark"] .button-danger { border-color: #72404a; background: #341b22; color: #ffadb8; }
+
 @media (max-width: 1040px) {
   .header-inner { gap: 16px; }
   .site-nav { gap: 18px; }
@@ -375,6 +469,7 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
   .section { padding: 82px 0; }
   .header-inner { flex-wrap: wrap; min-height: 70px; }
   .menu-button { display: flex; margin-left: auto; }
+  .theme-toggle-label { display: none; }
   .site-nav { order: 4; display: none; width: 100%; margin: 0; padding: 8px 0 18px; flex-direction: column; align-items: stretch; gap: 2px; }
   .site-nav.is-open { display: flex; }
   .site-nav a { padding: 10px 4px; }
