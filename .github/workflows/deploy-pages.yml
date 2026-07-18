@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages-finanzas
+  group: github-pages-payment-organizer-finanzas
   cancel-in-progress: true
 
 jobs:

@@ -34,7 +34,7 @@ test('local HTML resources resolve without root-relative paths', () => {
       assert.equal(fs.existsSync(target), true, `${page} references missing ${reference}`);
     }
   }
-  assert.match(read('404.html'), /<base href="\/finanzas\/">/);
+  assert.match(read('404.html'), /<base href="\/payment-organizer-finanzas\/">/);
 });
 
 test('shared configuration is the single backend URL source', () => {
@@ -44,8 +44,8 @@ test('shared configuration is the single backend URL source', () => {
   ];
   const occurrences = files.flatMap((file) => [...read(file).matchAll(/https:\/\/script\.google\.com\/macros\/s\//g)].map(() => file));
   assert.deepEqual(occurrences, ['shared/config.js']);
-  assert.match(read('shared/config.js'), /portal:\s*"\/finanzas\/portal\/"/);
-  assert.match(read('shared/config.js'), /admin:\s*"\/finanzas\/admin\/"/);
+  assert.match(read('shared/config.js'), /portal:\s*"\/payment-organizer-finanzas\/portal\/"/);
+  assert.match(read('shared/config.js'), /admin:\s*"\/payment-organizer-finanzas\/admin\/"/);
 });
 
 test('admin remains private-by-auth design and contains no embedded identity or password', () => {

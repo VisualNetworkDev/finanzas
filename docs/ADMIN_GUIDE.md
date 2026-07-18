@@ -1,6 +1,6 @@
 # Guía administrativa
 
-El administrador entra directamente por `/finanzas/admin/` con el correo autorizado y su contraseña. No necesita registrarse en la página pública. La identidad permitida y el verificador de contraseña viven en Script Properties; el frontend no los conoce.
+El administrador entra directamente por `/payment-organizer-finanzas/admin/` con el correo autorizado y su contraseña. No necesita registrarse en la página pública. La identidad permitida y el verificador de contraseña viven en Script Properties; el frontend no los conoce.
 
 ## Operación habitual
 

@@ -2,9 +2,9 @@
 
 Repositorio web consolidado de Payment Organizer. GitHub Pages publica tres entradas que comparten una sola configuración de API:
 
-- `/finanzas/`: sitio público, registro, inicio de sesión, descargas y documentos legales.
-- `/finanzas/portal/`: portal autenticado de usuarios.
-- `/finanzas/admin/`: panel administrativo autenticado, sin enlaces desde la página pública y con `noindex,nofollow`.
+- `/payment-organizer-finanzas/`: sitio público, registro, inicio de sesión, descargas y documentos legales.
+- `/payment-organizer-finanzas/portal/`: portal autenticado de usuarios.
+- `/payment-organizer-finanzas/admin/`: panel administrativo autenticado, sin enlaces desde la página pública y con `noindex,nofollow`.
 
 El backend de Google Apps Script y la aplicación Flutter se conservan localmente bajo `_private/`, que está excluido de Git. La web nunca recibe pagos, balances, deudas, notas ni recordatorios financieros personales; esos datos permanecen en el dispositivo.
 
