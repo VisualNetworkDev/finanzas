@@ -29,9 +29,10 @@
       <nav id="site-nav" class="site-nav" aria-label="Navegación principal" data-navigation>
         <a href="#beneficios">Beneficios</a>
         <a href="#como-funciona">Cómo funciona</a>
+        <a href="#cuenta">Registrarse</a>
         <a href="#privacidad">Privacidad</a>
         <a href="#planes">Planes</a>
-        <a href="#preguntas">Preguntas</a>
+        <a href="#descargas">Descargas</a>
       </nav>
       <div class="header-actions" data-access-actions hidden>
         <button class="button button-quiet" type="button" data-open-auth="login">Iniciar sesión</button>
@@ -56,7 +57,7 @@
           <div class="trust-row" aria-label="Características principales">
             <span>Datos financieros locales</span>
             <span>Sin conexión bancaria</span>
-            <span>Android y Windows</span>
+            <span>Android, iPhone y Windows</span>
           </div>
         </div>
 
@@ -152,6 +153,21 @@
       </div>
     </section>
 
+    <section id="cuenta" class="section section-muted">
+      <div class="shell account-panel reveal">
+        <div>
+          <p class="eyebrow">Tu cuenta web</p>
+          <h2>Regístrate con tu correo y entra sin contraseña.</h2>
+          <p>Recibirás un código de seis dígitos para verificar tu correo. Desde el portal podrás consultar tu plan, ver descargas habilitadas y gestionar las activaciones de tus dispositivos.</p>
+        </div>
+        <div class="account-actions">
+          <button class="button button-primary" type="button" data-open-auth="register" data-access-control hidden>Crear mi cuenta</button>
+          <button class="button button-secondary" type="button" data-open-auth="login" hidden>Ya tengo una cuenta</button>
+          <small>No guardamos contraseñas ni tus registros financieros en el portal.</small>
+        </div>
+      </div>
+    </section>
+
     <section id="privacidad" class="section privacy-section">
       <div class="shell privacy-panel reveal">
         <div class="privacy-copy">
@@ -207,10 +223,19 @@
       </div>
     </section>
 
-    <section class="section" data-downloads-section hidden>
-      <div class="shell download-panel reveal">
-        <div><p class="eyebrow">Descargas</p><h2>Instala Payment Organizer en tu dispositivo.</h2><p>El portal muestra únicamente versiones y enlaces oficialmente habilitados.</p></div>
-        <div class="download-actions" data-downloads></div>
+    <section id="descargas" class="section" data-downloads-section>
+      <div class="shell">
+        <div class="section-heading section-heading-center reveal">
+          <p class="eyebrow">Descargas oficiales</p>
+          <h2>Payment Organizer en el dispositivo que utilizas.</h2>
+          <p>Los botones aparecen únicamente cuando existe una versión real y su enlace ha sido habilitado.</p>
+        </div>
+        <div class="platform-grid">
+          <article class="platform-card reveal"><span class="platform-mark" aria-hidden="true">A</span><h3>Android</h3><p data-download-status="ANDROID">La descarga se habilitará al publicarse la versión oficial.</p></article>
+          <article class="platform-card reveal"><span class="platform-mark platform-mark-dark" aria-hidden="true">●</span><h3>iPhone</h3><p data-download-status="IOS">El enlace de Apple se habilitará al publicarse la versión oficial.</p></article>
+          <article class="platform-card reveal"><span class="platform-mark platform-mark-blue" aria-hidden="true">▦</span><h3>Windows</h3><p data-download-status="WINDOWS">El instalador se habilitará al publicarse la versión oficial.</p></article>
+        </div>
+        <div class="download-actions download-actions-center" data-downloads aria-live="polite"></div>
       </div>
     </section>
 
@@ -229,7 +254,7 @@
           <details class="reveal"><summary>¿Cuál es la diferencia entre Free y Premium?</summary><p>Free conserva las funciones locales esenciales. Premium utiliza una activación segura por dispositivo y permite habilitar las funciones definidas para ese plan sin mover tus datos financieros a la web.</p></details>
           <details class="reveal"><summary>¿Dónde se guardan mis datos financieros?</summary><p>Obligaciones, pagos, saldos, notas y recordatorios se guardan localmente en la aplicación. No se sincronizan automáticamente con el backend.</p></details>
           <details class="reveal"><summary>¿Necesito conectar mi banco?</summary><p>No. La aplicación no solicita credenciales bancarias, no consulta cuentas y no mueve dinero.</p></details>
-          <details class="reveal"><summary>¿En qué dispositivos funciona?</summary><p>La aplicación existente tiene soporte para Android y Windows. Los enlaces de descarga aparecen únicamente cuando una versión real está publicada.</p></details>
+          <details class="reveal"><summary>¿En qué dispositivos funciona?</summary><p>El proyecto está preparado para Android, iPhone y Windows. Cada enlace aparece únicamente cuando su versión real ha sido verificada y publicada.</p></details>
           <details class="reveal"><summary>¿Cómo activo Premium?</summary><p>Cuando tu cuenta tenga Premium, genera un código temporal en el portal e introdúcelo en la sección Activar plan de la aplicación.</p></details>
           <details class="reveal"><summary>¿Qué pasa si no tengo internet?</summary><p>Tus datos básicos siguen disponibles localmente. Premium puede conservarse durante el período de gracia contado desde la última validación correcta.</p></details>
           <details class="reveal"><summary>¿Cómo recupero el acceso al portal?</summary><p>Solicita un nuevo código por correo. No hay contraseña que recordar ni recuperar.</p></details>

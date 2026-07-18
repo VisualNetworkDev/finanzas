@@ -342,28 +342,30 @@
       ["IOS", "DOWNLOAD_IOS_ENABLED", "Ver para iPhone"]
     ];
     const downloads = [];
+    const container = document.querySelector("[data-downloads]");
+    if (container) container.replaceChildren();
     await Promise.all(platforms.map(async ([platform, flag, label]) => {
       if (!state.publicSettings[flag]) return;
       try {
         const version = await api.request("getAvailableVersion", { platform });
         const url = version.storeUrl || version.downloadUrl;
-        if (version.available && /^https:\/\//i.test(url || "")) downloads.push({ label, url, version: version.version });
+        if (version.available && /^https:\/\//i.test(url || "")) {
+          downloads.push({ platform, label, url, version: version.version });
+        }
       } catch (error) {
         return;
       }
     }));
-    if (!downloads.length) return;
-    const section = document.querySelector("[data-downloads-section]");
-    const container = document.querySelector("[data-downloads]");
     downloads.forEach((download) => {
+      const status = document.querySelector(`[data-download-status="${download.platform}"]`);
+      if (status) status.textContent = `Versión ${download.version} disponible.`;
       const anchor = document.createElement("a");
       anchor.className = "button button-primary";
       anchor.href = download.url;
       anchor.textContent = `${download.label} · ${download.version}`;
       anchor.rel = "noopener noreferrer";
-      container.append(anchor);
+      if (container) container.append(anchor);
     });
-    section.hidden = false;
   }
 
   function validateForm(form) {
