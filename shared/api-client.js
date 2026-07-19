@@ -2,7 +2,13 @@
   "use strict";
 
   const config = window.PAYMENT_ORGANIZER_CONFIG || {};
-  const SESSION_KEY = "paymentOrganizer.portalSession";
+  // Keep a portal session across normal page navigation and browser restarts.
+  // The backend token still controls access; this only prevents an accidental
+  // logout when the user opens FAQ/support from the portal.
+  const SESSION_KEY = "paymentOrganizer.portalSession.v2";
+  const LEGACY_SESSION_KEY = "paymentOrganizer.portalSession";
+  const PORTAL_IDLE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
+  let lastActivityWriteAt = 0;
 
   class ApiError extends Error {
     constructor(code, message, correlationId) {
@@ -33,6 +39,7 @@
     };
     if (options.token) body.token = options.token;
     if (options.deviceToken) body.deviceToken = options.deviceToken;
+    if (options.token) touchPortalSession();
     try {
       const response = await fetch(config.apiUrl, {
         method: "POST",
@@ -70,17 +77,37 @@
     if (!session || typeof session.token !== "string" || typeof session.expiresAt !== "string") {
       throw new ApiError("INVALID_SESSION", "No fue posible iniciar la sesión.");
     }
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: session.token, expiresAt: session.expiresAt }));
+    const now = Date.now();
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      token: session.token,
+      expiresAt: session.expiresAt,
+      lastActivityAt: now
+    }));
+    sessionStorage.removeItem(LEGACY_SESSION_KEY);
   }
 
   function getPortalSession() {
     try {
-      const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
-      if (!stored || typeof stored.token !== "string" || new Date(stored.expiresAt).getTime() <= Date.now()) {
+      let raw = localStorage.getItem(SESSION_KEY);
+      let migrated = false;
+      if (!raw) {
+        raw = sessionStorage.getItem(LEGACY_SESSION_KEY);
+        migrated = Boolean(raw);
+      }
+      const stored = JSON.parse(raw || "null");
+      const now = Date.now();
+      const lastActivityAt = Number(stored && stored.lastActivityAt) || now;
+      if (!stored || typeof stored.token !== "string" || new Date(stored.expiresAt).getTime() <= now || now - lastActivityAt > PORTAL_IDLE_LIMIT_MS) {
         clearPortalSession();
         return null;
       }
-      return stored;
+      const session = { token: stored.token, expiresAt: stored.expiresAt, lastActivityAt: now };
+      if (migrated || now - lastActivityAt > 60 * 1000) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        sessionStorage.removeItem(LEGACY_SESSION_KEY);
+      }
+      lastActivityWriteAt = now;
+      return session;
     } catch (error) {
       clearPortalSession();
       return null;
@@ -88,7 +115,28 @@
   }
 
   function clearPortalSession() {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(LEGACY_SESSION_KEY);
+  }
+
+  function touchPortalSession() {
+    const now = Date.now();
+    if (now - lastActivityWriteAt < 60 * 1000) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      if (!stored || typeof stored.token !== "string") return;
+      const lastActivityAt = Number(stored.lastActivityAt) || now;
+      if (now - lastActivityAt > PORTAL_IDLE_LIMIT_MS || new Date(stored.expiresAt).getTime() <= now) {
+        clearPortalSession();
+        return;
+      }
+      stored.lastActivityAt = now;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+      lastActivityWriteAt = now;
+    } catch (error) {
+      // Storage can be unavailable in private browsing; the API request still
+      // reports the authoritative session state from the backend.
+    }
   }
 
   function createRequestId() {
@@ -104,6 +152,11 @@
     request,
     savePortalSession,
     getPortalSession,
-    clearPortalSession
+    clearPortalSession,
+    touchPortalSession
+  });
+
+  ["pointerdown", "keydown", "touchstart", "visibilitychange"].forEach((eventName) => {
+    document.addEventListener(eventName, touchPortalSession, { passive: true });
   });
 })();

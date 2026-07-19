@@ -191,8 +191,8 @@ a { color: inherit; }
 .status-blue { background: var(--blue); box-shadow: 0 0 0 5px rgba(22, 119, 242, 0.12); }
 
 .floating-card { position: absolute; z-index: 3; display: flex; align-items: center; gap: 12px; min-width: 218px; padding: 14px 16px; border: 1px solid rgba(215, 224, 236, 0.9); border-radius: 17px; background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow-sm); }
-.floating-card-left { bottom: 70px; left: -20px; }
-.floating-card-right { top: 72px; right: -10px; }
+.floating-card-left { bottom: 18px; left: -118px; }
+.floating-card-right { top: 44px; right: -74px; }
 .floating-card b, .floating-card small { display: block; }
 .floating-card b { font-size: 13px; }
 .floating-card small { color: var(--ink-soft); font-size: 11px; }
@@ -501,9 +501,9 @@ html[data-theme="dark"] .button-danger { border-color: #72404a; background: #341
   .overview-card header img { width: 42px; height: 42px; }
   .schedule-list > div { grid-template-columns: 40px 1fr auto; padding: 10px; }
   .schedule-date { width: 38px; height: 38px; }
-  .floating-card { min-width: 195px; padding: 11px 12px; }
-  .floating-card-left { bottom: 20px; left: 4px; }
-  .floating-card-right { top: 20px; right: 0; }
+  /* Decorative status cards are hidden on narrow screens so they never cover
+     the primary overview card or the hero copy. */
+  .floating-card { display: none; }
   .feature-grid, .plans-grid { grid-template-columns: 1fr; }
   .feature-card { min-height: 240px; }
   .feature-card h3 { margin-top: 42px; }

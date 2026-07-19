@@ -67,6 +67,21 @@ test('portal applies strict activation eligibility and exposes feature access', 
   assert.match(read('portal/index.html'), /data-copy-code/);
 });
 
+test('portal sessions survive navigation and expire only after inactivity or backend expiry', () => {
+  const source = read('shared/api-client.js');
+  assert.match(source, /portalSession\.v2/);
+  assert.match(source, /localStorage\.setItem\(SESSION_KEY/);
+  assert.match(source, /PORTAL_IDLE_LIMIT_MS/);
+  assert.match(source, /clearPortalSession\(\)/);
+  assert.doesNotMatch(source, /sessionStorage\.setItem\(SESSION_KEY/);
+});
+
+test('the informational hero cards do not cover the mobile overview card', () => {
+  const source = read('styles.css');
+  assert.match(source, /\.floating-card \{ display: none; \}/);
+  assert.doesNotMatch(source, /\.floating-card-left \{ bottom: 20px; left: 4px; \}/);
+});
+
 test('public plan comparison names only implemented Premium features', () => {
   const page = read('index.html');
   for (const label of [
